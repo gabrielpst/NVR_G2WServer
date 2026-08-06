@@ -72,11 +72,11 @@ int bc_user_auth(const char *username, const char *password, int access_type, in
 		goto end;
 
 	switch (access_type) {
-		case ACCESS_SETUP:  access_field = "access_setup";
-		case ACCESS_REMOTE: access_field = "access_remote";
-		case ACCESS_WEB:    access_field = "access_web";
-		case ACCESS_BACKUP: access_field = "access_backup";
-		case ACCESS_RELAY:  access_field = "access_relay";
+		case ACCESS_SETUP:  access_field = "access_setup"; break;
+		case ACCESS_REMOTE: access_field = "access_remote"; break;
+		case ACCESS_WEB:    access_field = "access_web"; break;
+		case ACCESS_BACKUP: access_field = "access_backup"; break;
+		case ACCESS_RELAY:  access_field = "access_relay"; break;
 		default:            access_field = 0;
 	}
 
