@@ -1985,6 +1985,21 @@ int main(int argc, char **argv)
 			}
 		}
 
+		// Retenção por câmera (Devices.max_age_days, G2W Monitor) — roda no mesmo
+		// intervalo (5 min) do bloco acima, mas SEM o gate de should_run_cleanup():
+		// esse é sobre espaço em disco, a retenção por câmera precisa valer mesmo
+		// com disco sobrando (ex: câmera A = 3 dias mesmo com 90% de espaço livre).
+		if ((loops % 300) == 0 && g_cleanup_manager) {
+			std::thread age_cleanup_thread([]() {
+				if (g_cleanup_manager) {
+					int result = g_cleanup_manager->run_age_based_cleanup();
+					if (result < 0)
+						bc_log(Error, "Age-based retention cleanup failed");
+				}
+			});
+			age_cleanup_thread.detach();
+		}
+
 		/* Every 16 seconds until initialized, then every 4:16 minutes */
 		if ((!hwcard_ready && !(loops & 15)) || (hwcard_ready && !(loops & 255))) {
 			bc_status_component_begin(STATUS_HWCARD_DETECT);

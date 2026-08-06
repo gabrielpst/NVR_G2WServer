@@ -74,6 +74,7 @@ CREATE TABLE `Devices` (
   `motion_analysis_percentage` int(11) DEFAULT '-1',
   `schedule` varchar(168) NOT NULL DEFAULT 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
   `schedule_override_global` tinyint(1) DEFAULT '0',
+  `max_age_days` smallint(5) unsigned DEFAULT NULL,
   `disabled` tinyint(1) DEFAULT '0',
   `audio_disabled` tinyint(1) DEFAULT '1',
   `debug_level` tinyint(4) DEFAULT '0',

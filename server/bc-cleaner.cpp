@@ -32,6 +32,7 @@
 #define RETRY_BACKOFF_BASE 1
 #define MIN_SPACE_TO_FREE_GB 5  // Minimum space to free in GB
 #define SAFETY_MARGIN_PERCENT 5  // Safety margin to prevent over-cleaning
+#define AGE_CLEANUP_BATCH_SIZE 200  // Per-camera retention (max_age_days) cleanup batch size
 
 // LoadMonitor implementation
 double LoadMonitor::get_system_load() {
@@ -773,6 +774,67 @@ int CleanupManager::run_cleanup() {
     
     cleanup_in_progress = false;
     return 0;
+}
+
+// Retenção por câmera (G2W Monitor) — independente da limpeza por espaço em
+// disco acima (run_cleanup()/process_batch()), que é puramente FIFO global e
+// não olha pra Devices.max_age_days. Aqui cada câmera com max_age_days
+// definido (NULL = não usa essa feature, comportamento igual ao original)
+// perde mídia mais velha que N dias, mesmo que o disco esteja com espaço
+// sobrando — é política de retenção por câmera, não gestão de espaço.
+// Chamado no próprio schedule do main loop (bc-server.cpp), não depende do
+// gatilho de "storage acima do threshold" que governa run_cleanup().
+int CleanupManager::run_age_based_cleanup() {
+    std::lock_guard<std::mutex> lock(cleanup_mutex);
+
+    if (cleanup_in_progress) {
+        bc_log(Info, "Cleanup already in progress, skipping age-based retention cleanup");
+        return 0;
+    }
+
+    cleanup_in_progress = true;
+    int total_deleted = 0;
+
+    try {
+        BC_DB_RES dbres = bc_db_get_table(
+            "SELECT m.id, m.filepath FROM Media m "
+            "JOIN Devices d ON m.device_id = d.id "
+            "WHERE d.max_age_days IS NOT NULL AND m.archive=0 AND m.filepath!='' "
+            "AND m.start < DATE_SUB(NOW(), INTERVAL d.max_age_days DAY) "
+            "ORDER BY m.start ASC LIMIT %d", AGE_CLEANUP_BATCH_SIZE);
+
+        if (!dbres) {
+            bc_log(Error, "Database error during age-based retention cleanup");
+            cleanup_in_progress = false;
+            return -1;
+        }
+
+        std::vector<std::pair<int, std::string>> expired;
+        while (bc_db_fetch_row(dbres) == 0) {
+            const char *filepath = bc_db_get_val(dbres, "filepath", NULL);
+            int id = bc_db_get_val_int(dbres, "id");
+            if (filepath && *filepath)
+                expired.emplace_back(id, filepath);
+        }
+        bc_db_free_table(dbres);
+
+        for (const auto& entry : expired) {
+            if (delete_media_file(entry.second, entry.first))
+                total_deleted++;
+        }
+
+        if (total_deleted > 0) {
+            bc_log(Info, "Age-based retention cleanup: %d file(s) past their camera's "
+                   "max_age_days deleted", total_deleted);
+        }
+    } catch (const std::exception& e) {
+        bc_log(Error, "Exception during age-based retention cleanup: %s", e.what());
+        cleanup_in_progress = false;
+        return -1;
+    }
+
+    cleanup_in_progress = false;
+    return total_deleted;
 }
 
 cleanup_stats_report CleanupManager::get_stats_report() const {

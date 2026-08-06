@@ -381,6 +381,8 @@ define('AIP_ADVANCED_SETTINGS', 'advanced settings');
 define('AIP_CAMADDED', 'IP camera has been successfully added');
 define('AIP_PROTOCOL', 'Video stream source');
 define('AIP_ONVIF_PORT', 'ONVIF port');
+define('AIP_MAX_AGE_DAYS', 'Recording retention (days)');
+define('AIP_MAX_AGE_DAYS_EX', 'Leave blank to use the default storage cleanup (by disk space). Set a number of days to delete this camera\'s recordings automatically after that period, regardless of free disk space.');
 define('AIP_CHECK_ONVIF_PORT', 'ONVIF Probe & Autoconfigure');
 define('AIP_CHECK_ONVIF_SUCCESS', 'Successfull');
 define('AIP_CHECK_ONVIF_ERROR', 'Unsuccessful');

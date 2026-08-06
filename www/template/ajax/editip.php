@@ -196,6 +196,15 @@
                     </div>
 
                     <div class="form-group">
+                        <label class="col-lg-4 col-md-4 control-label"><?php echo AIP_MAX_AGE_DAYS; ?></label>
+
+                        <div class="col-lg-6 col-md-6">
+                            <input class="form-control" type="text" name="max_age_days" value="<?php echo $ipCamera->info['max_age_days']; ?>" placeholder="—" />
+                            <p class="help-block"><small><?php echo AIP_MAX_AGE_DAYS_EX; ?></small></p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="col-lg-4 col-md-4 control-label">
                             <a href="javascript:void(0);" class="btn btn-default" id="edittip-advanced-settings"><?php echo AIP_ADVANCED_SETTINGS; ?></a>
                         </label>

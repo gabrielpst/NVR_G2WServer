@@ -253,6 +253,7 @@ private:
 public:
     CleanupManager();
     int run_cleanup();
+    int run_age_based_cleanup();
     int run_database_sync();
     cleanup_stats_report get_stats_report() const;
     int calculate_batch_size();

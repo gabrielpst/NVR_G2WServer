@@ -935,6 +935,12 @@ class ipCamera{
 			$data['hls_window_size'] = (empty($rawData['hls_window_size'])) ? "5" : $rawData['hls_window_size']; //default to hls window size
 			$data['hls_segment_duration'] = $rawData['hls_segment_duration']; //default to hls segment duration
 			$data['hls_segment_size'] = $rawData['hls_segment_size']; //default to hls segment size
+		#prepare per-camera recording retention override (G2W Monitor) — campo
+		#vazio = NULL (usa a limpeza padrão por espaço em disco), valor definido
+		#= dias de retenção só dessa câmera. NULL de propósito, não "0"/"" —
+		#tratado à parte em edit()/create(), formQueryFromArray() não emite NULL.
+			$data['max_age_days'] = (isset($rawData['max_age_days']) && $rawData['max_age_days'] !== '')
+				? intval($rawData['max_age_days']) : null;
 
 			//var_dump_pre($data); exit();
 			
@@ -948,14 +954,23 @@ class ipCamera{
 	public function edit($data){
 		$data = self::prepareData($data, $this->info['id']);
 		#if errors were detected -- return error
-        if (!$data[0]) { 
-            return $data; 
-        } else { 
-            //unset($data[1]['device_name']); 
+        if (!$data[0]) {
+            return $data;
+        } else {
+            //unset($data[1]['device_name']);
         }
+		#max_age_days (retenção por câmera, G2W Monitor) precisa de UPDATE à
+		#parte: formQueryFromArray() sempre escapa como string ('valor'), nunca
+		#consegue emitir NULL de verdade — um valor vazio viraria '' (0 no
+		#MySQL) em vez de "sem override", quebrando o significado de NULL.
+		$max_age_days = $data[1]['max_age_days'];
+		unset($data[1]['max_age_days']);
 		#if there were no errors, edit the camera
 		$query = data::formQueryFromArray('update', 'Devices', $data[1], 'id', $this->info['id']);
 		$result = data::query($query, true);
+
+		$max_age_days_sql = ($max_age_days === null) ? 'NULL' : intval($max_age_days);
+		data::query("UPDATE Devices SET max_age_days={$max_age_days_sql} WHERE id='{$this->info['id']}'", true);
 
 		return array($result, false);
 	}
@@ -972,7 +987,10 @@ class ipCamera{
 
 		$hls_segment_size = $data['hls_segment_size']  ? $data['hls_segment_size'] : 0;
 		$hls_segment_duration = $data['hls_segment_duration'] ?  $data['hls_segment_duration'] : 0;
-		$inputQuery = "INSERT INTO Devices (device_name, protocol, device, driver, rtsp_username, rtsp_password, resolutionX, resolutionY, mjpeg_path, model, rtsp_rtp_prefer_tcp, onvif_port, substream_path, hls_window_size, hls_segment_size, hls_segment_duration) VALUES ('{$data['device_name']}', '{$data['protocol']}', '{$data['device']}', '{$data['driver']}', '{$data['rtsp_username']}', '{$data['rtsp_password']}', 640, 480, '{$data['mjpeg_path']}', '{$data['model']}', {$data['rtsp_rtp_prefer_tcp']}, {$data['onvif_port']},'{$data['substream_path']}', {$data['hls_window_size']}, {$hls_segment_size}, {$hls_segment_duration})";
+		#retenção por câmera (G2W Monitor) — NULL literal (sem aspas) quando não
+		#definida, mesma lógica do edit() acima.
+		$max_age_days_sql = ($data['max_age_days'] === null) ? 'NULL' : intval($data['max_age_days']);
+		$inputQuery = "INSERT INTO Devices (device_name, protocol, device, driver, rtsp_username, rtsp_password, resolutionX, resolutionY, mjpeg_path, model, rtsp_rtp_prefer_tcp, onvif_port, substream_path, hls_window_size, hls_segment_size, hls_segment_duration, max_age_days) VALUES ('{$data['device_name']}', '{$data['protocol']}', '{$data['device']}', '{$data['driver']}', '{$data['rtsp_username']}', '{$data['rtsp_password']}', 640, 480, '{$data['mjpeg_path']}', '{$data['model']}', {$data['rtsp_rtp_prefer_tcp']}, {$data['onvif_port']},'{$data['substream_path']}', {$data['hls_window_size']}, {$hls_segment_size}, {$hls_segment_duration}, {$max_age_days_sql})";
 
 		$result = data::query($inputQuery, true);
 		#try to automatically set the camera up

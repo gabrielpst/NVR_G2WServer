@@ -198,7 +198,16 @@
 
 
                     </div>
-                    
+
+                    <div class="form-group">
+                        <label class="col-lg-4 col-md-4 control-label"><?php echo AIP_MAX_AGE_DAYS; ?></label>
+
+                        <div class="col-lg-6 col-md-6">
+                            <input class="form-control" type="text" name="max_age_days" value="" placeholder="—" />
+                            <p class="help-block"><small><?php echo AIP_MAX_AGE_DAYS_EX; ?></small></p>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <div class="col-lg-6 col-lg-offset-4 col-md-6 col-md-offset-4">
                             <button class="btn btn-success send-req-form" type="submit" data-redirect-success="/devices"><i class="fa fa-check fa-fw"></i> <?php echo AIP_ADD; ?></button>
