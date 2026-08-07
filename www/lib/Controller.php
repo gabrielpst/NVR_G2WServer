@@ -72,13 +72,19 @@ class Controller {
 
             // check for general errors
             $main_page->general_error = '';
-    		$default_password_warning_dismiss = (!empty($_COOKIE['default_password_warning_dismiss'])) ? $_COOKIE['default_password_warning_dismiss'] : false;
-    		if ($this->user->info['default_password'] && !empty($_COOKIE['default_password_warning_dismiss'])) {
+    		// Condição estava invertida no upstream (!empty), ou seja: o aviso de
+    		// senha padrão só aparecia DEPOIS que o usuário dispensava ele, e nunca
+    		// antes — exatamente o contrário do pretendido. Agora aparece enquanto
+    		// a senha padrão não for trocada e o aviso não tiver sido dispensado.
+    		if ($this->user->info['default_password'] && empty($_COOKIE['default_password_warning_dismiss'])) {
     			$main_page->general_error = array('type' => 'INFO', 'text' => WARN_DEFAULT_PASSWORD);
     		}
 
-            $ret = bc_license_check_genuine();
-            $main_page->general_error = array('type' => 'INFO', 'text' => $ret[1]);
+    		// Banner "Free and Open Source - No License Required" removido: era
+    		// incondicional (aparecia em toda página) e, por sobrescrever o
+    		// general_error acima sem checar nada, engolia justamente o aviso de
+    		// senha padrão não trocada. bc_license_check_genuine() continua
+    		// existindo e retornando sempre "genuine" pra quem chamar.
 
     		$status = data::getObject('ServerStatus');
     		if (!empty($status[0]['message'])) {

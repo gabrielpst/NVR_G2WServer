@@ -11,7 +11,11 @@
     <script type="text/javascript" src="./lib/mootools-plugins.js"></script>
     <script type="text/javascript" src="./lib/js/viewer.js"></script>
     <script type="text/javascript" src="/vars"></script>
-    <script type="text/javascript" src="//cdn.jsdelivr.net/hls.js/latest/hls.min.js"></script>
+    <?php # Era "//cdn.jsdelivr.net/hls.js/latest/hls.min.js" — caminho legado e
+    # descontinuado do jsDelivr, que serve uma versão 0.x bem antiga do hls.js
+    # (sem suporte a HEVC e sem várias correções). Agora aponta pro caminho de
+    # pacote atual, com versão fixada pra não quebrar sozinho num update deles. ?>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
     <script type="text/javascript">
         var session = <?php echo json_encode($_SESSION['layouts']); ?>;
     </script>

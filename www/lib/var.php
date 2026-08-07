@@ -53,6 +53,14 @@ define('VAR_IPCAMLIST_UPDATE_TOKEN', 'Hiuhg3TnbJl1676T');
 
 define('RM_CLIENT_DOWNLOAD', 'https://github.com/gabrielpst/unity_g2w/releases');
 
+# Relay RTMP (MediaMTX) — usado pela tela "Find RTMP streams" (www/ajax/findrtmp.php).
+# Câmeras que só falam RTMP empurram pro relay, e o bc-server consome o RTSP que
+# ele reexpõe. A API só é alcançável de dentro do host (publicada em 127.0.0.1
+# no docker-compose.yml), nunca da rede.
+define('VAR_MEDIAMTX_API', 'http://mediamtx:9997');
+define('VAR_MEDIAMTX_RTSP_HOST', 'mediamtx');
+define('VAR_MEDIAMTX_RTSP_PORT', '8554');
+
 define('VAR_LICENSE_AUTH', 'http://keycheck.bluecherrydvr.com');
 
 $varpub = VarPub::get();

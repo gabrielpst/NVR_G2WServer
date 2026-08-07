@@ -331,6 +331,7 @@
     <script src="/template/dist/js/general.js"></script>
     <script src="/template/dist/js/playback.js"></script>
     <script src="/template/dist/js/discoverCameras.js"></script>
+    <script src="/template/dist/js/findrtmp.js"></script>
     <script src="/template/dist/js/profile.js"></script>
     <script src="/template/dist/js/ptz.js"></script>
     <script src="/template/dist/js/webhook.js"></script>

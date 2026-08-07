@@ -4995,3 +4995,50 @@ INSERT INTO "cameras"
 VALUES (NULL, 'ds-2cd4012fwd-apw', 'DS-2CD4012FWD-(A)(P)(W)', '52', 'Streaming/Channels/1/picture', '', 'h264/ch1/maiv_stream', '1280x960', 'Box', 'admin', '12345', '1', 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 'a:1:{i:0;a:1:{s:3:"url";s:113:"http://s3.amazonaws.com/cambase/images/files/000/006/305/original/47d6c7bc581d9771b7ffae003255f7f7.jpg?1426619856";}}', '');
 INSERT INTO "cameras" 
 VALUES (NULL, 'ds-2cd4012f-apw', 'DS-2CD4012F-(A)(P)(W)', '52', 'Streaming/Channels/1/picture', '', 'h264/ch1/maiv_stream', '1280x1024', 'Box', 'admin', '12345', '1', 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 'a:1:{i:0;a:1:{s:3:"url";s:113:"http://s3.amazonaws.com/cambase/images/files/000/006/303/original/0768b602b9f62fced531c922f4ee6e6a.jpg?1426619852";}}', '');
+
+
+-- ###########################################################################
+-- ATENÇÃO — NÃO rode scripts/update_cameras_db.sh sem ler isto primeiro.
+--
+-- Este arquivo .sql está DESATUALIZADO em relação ao cameras_shipped.db que
+-- realmente é distribuído: o .sql gera 53 fabricantes / 2458 modelos, mas o
+-- .db tem 75 fabricantes / 2867 modelos (conferido em 2026-08-07). Alguém em
+-- algum momento atualizou o .db sem atualizar este fonte.
+--
+-- Regenerar o .db a partir deste .sql PERDE ~21 fabricantes e ~400 modelos.
+-- Por isso a entrada da Intelbras abaixo foi aplicada DIRETO no .db binário
+-- (INSERT incremental), e replicada aqui só pra manter o fonte coerente caso
+-- um dia o .sql seja ressincronizado com o .db.
+-- ###########################################################################
+
+-- ---------------------------------------------------------------------------
+-- Intelbras (G2W Monitor) — não vem na base original (focada no mercado
+-- americano/europeu). A Intelbras usa o mesmo protocolo RTSP da Dahua na
+-- maioria das linhas (VIP, MHDX, NVD), formato:
+--   rtsp://usuario:senha@IP:554/cam/realmonitor?channel=X&subtype=Y
+--     subtype=0 -> stream principal (alta qualidade)
+--     subtype=1 -> stream extra (baixa qualidade)
+--     channel   -> número da porta no DVR/NVR; câmera ligada direto = sempre 1
+-- Como o caminho é idêntico entre os modelos, as entradas abaixo são genéricas
+-- por tipo de stream/canal — depois de escolher, é só ajustar o número do canal
+-- no campo "Path to RTSP" se a câmera estiver atrás de um DVR/NVR.
+-- ---------------------------------------------------------------------------
+
+INSERT INTO "manufacturers" VALUES ('75', 'Intelbras', 'intelbras');
+
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-cam-principal', 'Câmera IP - Stream principal (canal 1)', '75', '/cgi-bin/snapshot.cgi', '/cgi-bin/mjpg/video.cgi?channel=1&subtype=0', '/cam/realmonitor?channel=1&subtype=0', '', 'Bullet', 'admin', 'admin', '', 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-cam-extra', 'Câmera IP - Stream extra (canal 1)', '75', '/cgi-bin/snapshot.cgi', '/cgi-bin/mjpg/video.cgi?channel=1&subtype=1', '/cam/realmonitor?channel=1&subtype=1', '', 'Bullet', 'admin', 'admin', '', 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-dvr-ch1', 'DVR/NVR - Canal 1 (principal)', '75', '/cgi-bin/snapshot.cgi?channel=1', '', '/cam/realmonitor?channel=1&subtype=0', '', 'Other', 'admin', 'admin', '', 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-dvr-ch2', 'DVR/NVR - Canal 2 (principal)', '75', '/cgi-bin/snapshot.cgi?channel=2', '', '/cam/realmonitor?channel=2&subtype=0', '', 'Other', 'admin', 'admin', '', 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-dvr-ch3', 'DVR/NVR - Canal 3 (principal)', '75', '/cgi-bin/snapshot.cgi?channel=3', '', '/cam/realmonitor?channel=3&subtype=0', '', 'Other', 'admin', 'admin', '', 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-dvr-ch4', 'DVR/NVR - Canal 4 (principal)', '75', '/cgi-bin/snapshot.cgi?channel=4', '', '/cam/realmonitor?channel=4&subtype=0', '', 'Other', 'admin', 'admin', '', 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-vip-serie', 'VIP (série) - Stream principal', '75', '/cgi-bin/snapshot.cgi', '/cgi-bin/mjpg/video.cgi?channel=1&subtype=0', '/cam/realmonitor?channel=1&subtype=0', '', 'Bullet', 'admin', 'admin', '', 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');
+INSERT INTO "cameras" 
+VALUES (NULL, 'intelbras-vip-ptz', 'VIP PTZ - Stream principal', '75', '/cgi-bin/snapshot.cgi', '/cgi-bin/mjpg/video.cgi?channel=1&subtype=0', '/cam/realmonitor?channel=1&subtype=0', '', 'Dome', 'admin', 'admin', '', 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 'a:0:{}', 'https://www.intelbras.com/');

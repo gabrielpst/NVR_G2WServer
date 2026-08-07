@@ -13,6 +13,7 @@
     <div class="col-lg-12">
         <div class="pull-right">
             <a href="/discover-cameras" class="btn btn-success ajax-content" role="button"><i class="fa fa-search fa-fw"></i> <?php echo DISCOVER_IP_CAMERAS; ?></a>
+            <a href="/findrtmp" class="btn btn-success ajax-content" role="button"><i class="fa fa-rss fa-fw"></i> <?php echo FIND_RTMP_HEADER; ?></a>
             <a href="/addip" class="btn btn-success ajax-content" role="button"><i class="fa fa-plus fa-fw"></i> <?php echo AIP_HEADER; ?></a>
         </div>
         <div class="clearfix"></div>

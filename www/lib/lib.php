@@ -1387,9 +1387,14 @@ class globalSettings{
 			$this->data['G_MAX_RECORD_TIME'] = 900;
 		}
 
+		// Gravava 'live' no banco mas setava 'local' em memória — ou seja, na
+		// primeira requisição o comportamento era um, e da segunda em diante
+		// outro. Agora é 'local' nos dois: a lista local (cameras.db, embutida
+		// na imagem) não depende de internet nem da API da Bluecherry, e é a
+		// única que dá pra editar/estender (ex: fabricante Intelbras).
 		if (empty($this->data['G_DATA_SOURCE'])) {
 			data::query("DELETE FROM GlobalSettings where parameter = 'G_DATA_SOURCE'", true);
-			data::query("INSERT INTO GlobalSettings VALUES('G_DATA_SOURCE', 'live')", true);
+			data::query("INSERT INTO GlobalSettings VALUES('G_DATA_SOURCE', 'local')", true);
 			$this->data['G_DATA_SOURCE'] = 'local';
 		}
 
@@ -1579,15 +1584,38 @@ class Cameras
                         // $data = $data['models'][0];
 
         } else {
+            // O modo "Local list" estava quebrado de duas formas independentes:
+            //  1. $id só é atribuído dentro do ramo "live" acima, então aqui a
+            //     consulta rodava com NULL e nunca achava câmera nenhuma;
+            //  2. as colunas do SQLite (model, h264_url, default_username, ...)
+            //     não batem com os nomes que o código logo abaixo espera
+            //     ('Model', 'RTSP path', 'Default username', ...), que são os da
+            //     API online — então, mesmo achando a linha, todo campo voltava
+            //     vazio e o formulário não era preenchido.
+            // Aqui o próprio $details já é o api_id (o select local é montado
+            // como api_id => model, ver Cameras::getList()), e a linha do banco
+            // é normalizada pros mesmos nomes de campo que o ramo online produz.
             $adapter = getReadOnlyDb();
             $stmt = $adapter->prepare(
                 'SELECT C.*, M.manufacturer AS manufacturer_id ' .
-                'FROM cameras AS c ' .
-                'JOIN manufacturers AS M ON c.manufacturer = M.id ' .
-                'WHERE api_id = ? '
+                'FROM cameras AS C ' .
+                'JOIN manufacturers AS M ON C.manufacturer = M.id ' .
+                'WHERE C.api_id = ? '
             );
-            $stmt->execute(array($id));
-            $data = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->execute(array($details));
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $data = Array();
+            if ($row) {
+                $data = Array(
+                    'Model'            => $row['model'],
+                    'RTSP path'        => $row['h264_url'],
+                    'MJPEG path'       => $row['mjpeg_url'],
+                    'Default username' => $row['default_username'],
+                    'Default password' => $row['default_password'],
+                    'ManufacturerLink' => Array($row['manufacturer_id']),
+                );
+            }
         }
 
         // if (isset($data['vendor_id'])) {
@@ -1599,6 +1627,12 @@ class Cameras
 
                 if (isset($data['ManufacturerLink'][0])) {
             $data['rtsp_port'] = strcasecmp('acti', $data['ManufacturerLink'][0]) == '' ? 7070 : 554;
+        }
+        // Garante um padrão: sem isso, quando o fabricante não vem preenchido, o
+        // $data['rtsp_port'] usado mais abaixo fica indefinido (aviso de PHP +
+        // porta vazia no formulário).
+        if (!isset($data['rtsp_port'])) {
+            $data['rtsp_port'] = 554;
         }
 
         if(!empty($data['MJPEG path'])) {
@@ -1623,7 +1657,7 @@ class Cameras
         $data_r = Array(
             'camName' => (isset($data['Model']) ? $data['Model'] : ''),
             'mjpegPath' => (isset($data['mjpeg_path']) ? $data['mjpeg_path'] : ''),
-            'rtspPath' => $data['rtsp_path'],
+            'rtspPath' => (isset($data['rtsp_path']) ? $data['rtsp_path'] : ''),
             'mjpegPort' => 80,
             'rtspPort' => $data['rtsp_port'],
             'resolutions' => '',

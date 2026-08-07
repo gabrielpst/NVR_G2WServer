@@ -346,6 +346,24 @@ define('CLICK_HERE_TO_UPDATE', '[Yes]');
 
 define('AIP_HEADER', 'Add an IP Camera');
 define('DISCOVER_IP_CAMERAS', 'Discover IP Cameras');
+
+#find rtmp streams (relay MediaMTX)
+define('FIND_RTMP_HEADER', 'Find RTMP streams');
+define('FIND_RTMP_INTRO', 'Cameras that only speak RTMP push their stream to the relay, which re-serves it as RTSP for the server to record. Use this page to see what is publishing right now — useful when the camera builds the stream path on its own (some use their serial number) and you cannot guess it.');
+define('FIND_RTMP_PUSH_HINT', 'Point the camera/encoder to: rtmp://&lt;this server&gt;:1935/&lt;name of your choice&gt;');
+define('FIND_RTMP_FIND', 'Find streams');
+define('FIND_RTMP_ADD', 'Add selected streams');
+define('FIND_RTMP_FOUND', 'Stream list updated.');
+define('FIND_RTMP_ADDED', 'Camera(s) added.');
+define('FIND_RTMP_NONE_ADDED', 'No camera was added.');
+define('FIND_RTMP_NO_RELAY', 'Could not reach the RTMP relay. Check that the mediamtx service is running and that its API is enabled.');
+define('FIND_RTMP_BAD_RESPONSE', 'The RTMP relay replied in an unexpected format.');
+define('FIND_RTMP_COL_STREAM', 'Stream');
+define('FIND_RTMP_COL_STATUS', 'Status');
+define('FIND_RTMP_COL_NAME', 'Camera name');
+define('FIND_RTMP_LIVE', 'publishing');
+define('FIND_RTMP_IDLE', 'idle');
+define('FIND_RTMP_EXISTS', 'already added');
 define('AIP_NEW_LIST_AVAILABLE', 'It appears that a newer version of our supported camera list is available. Would you like to upgrade to this version?');
 define('AIP_LIST_UPDATED_SUCCESSFULLY', 'Camera list updates sussessfully.');
 define('AIP_NEW_LIST_AVAIL', 'New ip camera tables are available.');

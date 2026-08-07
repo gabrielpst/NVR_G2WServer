@@ -403,19 +403,46 @@ setHlsLink = function(videoLink, videoId, imgClass) {
 		var hls = new Hls();
 
 		element = new Element('video', {'class': imgClass, 'id': videoId, 'controls': '', 'autoplay': 'true', 'width': '100%', 'height': 'auto'});
+		var videoEl = element;
 		hls.loadSource(videoLink);
 		hls.attachMedia(element);
 		hls.on(Hls.Events.MANIFEST_PARSED,function() {
-			video.play();
+			// Era "video.play()" — variável inexistente (o elemento se chama
+			// "element"), então isso sempre estourava um ReferenceError silencioso
+			// dentro do handler. O vídeo só tocava por causa do atributo autoplay.
+			var played = videoEl.play();
+			if (played && played.catch) {
+				played.catch(function(e) { console.warn('Live view: falha ao iniciar reprodução:', e); });
+			}
 		});
-	} else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-		element = new Element('video', {'class': imgClass, 'id': videoId, 'controls': '', 'autoplay': 'true', 'width': '100%', 'height': 'auto'});
-		element.src = videoLink;
-		element.addEventListener('loadedmetadata',function() {
-			element.play();
+		// Sem esse handler, falha de decodificação não aparecia em lugar nenhum:
+		// o player ficava preto, travado em 0:00, sem mensagem alguma (caso real:
+		// câmera publicando em H.265/HEVC, que Chrome/Firefox não decodificam via
+		// MSE). Agora o motivo real fica visível por cima do player.
+		hls.on(Hls.Events.ERROR, function(evt, data) {
+			console.error('Live view HLS error:', data);
+			if (!data || !data.fatal) { return; }
+			var msg = 'Falha ao exibir o vídeo ao vivo.';
+			if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+				msg = 'O navegador não conseguiu decodificar este vídeo. Se a câmera estiver em H.265/HEVC, mude-a para H.264 ou use o método MJPEG em Configurações Gerais.';
+			} else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+				msg = 'Não foi possível carregar o vídeo ao vivo (erro de rede).';
+			}
+			showHlsMessage(videoEl, msg);
 		});
 	} else {
-		element = new Element('img', {'class': imgClass, 'id': videoId, 'src': '/img/icons/layouts/hls-not-support.png'});
+		element = new Element('video', {'class': imgClass, 'id': videoId, 'controls': '', 'autoplay': 'true', 'width': '100%', 'height': 'auto'});
+		// Era "video.canPlayType(...)" — mesma variável inexistente, então esse
+		// ramo (HLS nativo, Safari/iOS) também estourava em vez de funcionar.
+		// Agora testa no próprio elemento recém-criado.
+		if (element.canPlayType('application/vnd.apple.mpegurl')) {
+			element.src = videoLink;
+			element.addEventListener('loadedmetadata',function() {
+				element.play();
+			});
+		} else {
+			element = new Element('img', {'class': imgClass, 'id': videoId, 'src': '/img/icons/layouts/hls-not-support.png'});
+		}
 	}
 
 	element.style.width     = width;
@@ -424,6 +451,25 @@ setHlsLink = function(videoLink, videoId, imgClass) {
 	element.style.minHeight = minHeight;
 
 	parent.appendChild(element);
+}
+
+// Mostra uma mensagem legível por cima do player. Usado quando o HLS falha por
+// motivo que não tem imagem própria em /img/icons/layouts/ (ex: codec que o
+// navegador não decodifica) — antes esses casos ficavam completamente mudos.
+showHlsMessage = function(videoEl, message) {
+	if (!videoEl || !videoEl.parentNode) { return; }
+	var parent = videoEl.parentNode;
+	if (parent.querySelector && parent.querySelector('.hls-error-message')) { return; }
+	if (!parent.style.position || parent.style.position === 'static') {
+		parent.style.position = 'relative';
+	}
+	var box = document.createElement('div');
+	box.className = 'hls-error-message';
+	box.style.cssText = 'position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);' +
+		'padding:8px;background:rgba(0,0,0,.78);color:#fff;font-size:12px;line-height:1.4;' +
+		'text-align:center;z-index:10;';
+	box.textContent = message;
+	parent.appendChild(box);
 }
 
 setHlsErrorImage = function(elementId, message) {

@@ -322,7 +322,14 @@ class discoverCameras extends Controller {
                             $main_stream = $urls[0]['rtspUri'];
                             $sub_stream = $urls[1]['rtspUri'];
                         } else {
-                            $p = @popen("/usr/lib/bluecherry/onvif_tool " . escapeshellarg($onvif_addr) .' '. escapeshellarg($onvif_username) .' '. escapeshellarg($onvif_password). " get_stream_urls", "r");
+                            // Caminho estava errado: /usr/lib/bluecherry/onvif_tool não
+                            // existe. O binário instalado pelo pacote fica em
+                            // /usr/share/bluecherry/onvif/discovery_json/onvif_tool —
+                            // é inclusive o mesmo caminho já usado corretamente na
+                            // descoberta, em postData() (ver array $tools acima).
+                            // Sem isso, esse fallback (usado quando o getRtspUrls.js
+                            // do Node falha) nunca funcionava.
+                            $p = @popen("/usr/share/bluecherry/onvif/discovery_json/onvif_tool " . escapeshellarg($onvif_addr) .' '. escapeshellarg($onvif_username) .' '. escapeshellarg($onvif_password). " get_stream_urls", "r");
                              if (!$p)
                                     break;
 
