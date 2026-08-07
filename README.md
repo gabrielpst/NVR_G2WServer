@@ -1,36 +1,49 @@
-## Chat with us on Discord!
+# G2W Monitor Server
 
-[![](https://dcbadge.limes.pink/api/server/64xADw6vuC)](https://discord.gg/64xADw6vuC)
+Servidor de gravação e monitoramento de câmeras (NVR) da **[G2W Tecnologia](https://monitor.g2wseguranca.com.br)** — fork do [`bluecherry-apps`](https://github.com/bluecherrydvr/bluecherry-apps), aberto sob **GPL v2** desde 2019.
 
-## Building from source
+Cliente correspondente (app desktop/mobile): [`unity_g2w`](https://github.com/gabrielpst/unity_g2w) — "G2W Monitor".
 
-Currently building from source requires running pre-configured scripts to generate some of the required files for a build.  In the past we used chroots for build environments, however it is possible to build for your specific distributions using the following command:
+## O que é diferente do projeto original
 
-In the root of bluecherry-apps run the following command.
+Este fork mantém compatibilidade com o `bluecherry-apps` original, mas com correções e recursos próprios:
 
-``scripts/build_pkg_native.sh``
+- **Correção de segurança**: autenticação RTSP/HLS/API (`lib/bc-utils.cpp`) tinha um bug de fallthrough em `switch` que permitia acesso remoto a qualquer usuário com login válido, mesmo sem a permissão `access_remote` marcada. Corrigido.
+- **Retenção de gravação por câmera**: cada câmera pode ter seu próprio prazo de retenção (`max_age_days`, configurável no painel), independente da limpeza padrão por espaço em disco — ex.: câmera A retém 3 dias, câmera B retém 7.
+- **Ingestão RTMP**: câmeras/encoders que só falam RTMP são recebidas via relay ([MediaMTX](https://github.com/bluenviron/mediamtx)), sem precisar de mudança no servidor — ver `docker-compose.yml`.
 
-Example:
+## Build e execução
 
-``root@buildtest:~/git/bluecherry-apps# scripts/build_pkg_native.sh``
- 
-**Please do not use 'dh' specific commands, the scripts generate several files (version.h for example) and the Debian control files for you.**
+O jeito suportado é via Docker (`Dockerfile` na raiz) — compila o `.deb` a partir do próprio código-fonte deste repositório (não baixa pacote de terceiro) e monta a imagem de execução (nginx + PHP-FPM + bc-server, mesmo stack usado em produção).
 
+```bash
+docker build -t g2wserver:latest .
+docker compose up -d   # sobe MySQL + bc-server + MediaMTX (RTMP)
+```
 
+Painel web: `https://<host>:7001` (login inicial `Admin` / `bluecherry` — trocar a senha assim que entrar).
 
-Dependencies (server):
- * mysql (debian: libmysqlclient-dev)
- * libbsd (debian: libbsd-dev)
- * php (debian: php5-dev)
- * udev (debian: libudev-dev)
+Build alternativo direto na máquina (sem Docker) via `scripts/build_pkg_native.sh` — script original do projeto, depende de headers de kernel do host. Não usar comandos `dh` diretamente: os scripts geram alguns arquivos necessários (`version.h`, por exemplo) e os arquivos de controle do Debian antes da build.
 
-Dependencies (libav):
- * yasm
- * alsa-lib (debian: libasound2-dev)
+**Dependências (servidor):**
+- mysql (debian: `libmysqlclient-dev`)
+- libbsd (debian: `libbsd-dev`)
+- php (debian: `php-dev`)
+- udev (debian: `libudev-dev`)
 
-Bundled libraries:
- * libconfig
- * libav
+**Dependências (libav):**
+- yasm
+- alsa-lib (debian: `libasound2-dev`)
 
---------
+**Bibliotecas incluídas:**
+- libconfig
+- libav
 
+## Licença
+
+GPL v2, herdada do projeto original. Ver `LICENSE`.
+
+## Contato
+
+**G2W Tecnologia** — [monitor.g2wseguranca.com.br](https://monitor.g2wseguranca.com.br)
+WhatsApp: [+55 67 99608-6281](https://wa.me/5567996086281) · E-mail: [contato@g2wseguranca.com.br](mailto:contato@g2wseguranca.com.br)
