@@ -44,7 +44,11 @@ class Route
             // AnnounceKit da Bluecherry — carrega o changelog deles a cada
             // login, vazando IP/UA do usuário pra infra deles). Landing page
             // agora é o painel de status do sistema, sem chamada externa.
-            $uri['path'] = '/monitoring';
+            // Controller real é ajax/monitor.php (rota /monitor, singular —
+            // "monitoring" só existe como nome do template/menu, não da rota;
+            // erro pego em teste real: usar "/monitoring" aqui dava "Route
+            // error!" porque www/ajax/monitoring.php não existe).
+            $uri['path'] = '/monitor';
         } else {
             if (preg_match('/ajax\/(.*)\.php/', $url, $matches)) {
                 $old_ajax_url = true;
