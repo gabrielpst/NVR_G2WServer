@@ -174,6 +174,21 @@ class discoverCameras extends Controller {
             34599
         );
 
+        // Descoberta em PHP puro (ver wsDiscover()). Vem primeiro porque as duas
+        // ferramentas externas abaixo NÃO funcionam nesta imagem:
+        //   - a de Node exige o pacote bluecherry-node-onvif (Recommends:, que
+        //     não é instalado) e o módulo npm em /usr/share/nodejs/onvif;
+        //   - onvif_tool é um wrapper PHP que chama /usr/lib/bluecherry/onvif_tool,
+        //     binário que o pacote nunca instala (dpkg -L confirma: só vão os
+        //     scripts). Falha do projeto original, não da nossa build.
+        // Ficam na lista mesmo assim, como reforço, caso alguém instale o pacote
+        // do Node depois — quem responder primeiro ganha, sem duplicar IP.
+        foreach ($this->wsDiscover() as $cam) {
+            if (in_array($cam['ipv4'], $ips)) { continue; }
+            $res[] = $cam;
+            $ips[] = $cam['ipv4'];
+        }
+
         $tools = Array(
             "NODE_PATH=/usr/share/nodejs/onvif/node_modules node /usr/share/bluecherry/onvif/discovery_json/node-onvif.js",
             "/usr/share/bluecherry/onvif/discovery_json/onvif_tool",
@@ -183,6 +198,7 @@ class discoverCameras extends Controller {
             if (!$p) { continue; }
             while ($json_str = fgets($p)) {
                 $cam = json_decode($json_str, true);
+                if (empty($cam['ipv4'])) { continue; }
                 $ip = $cam['ipv4'];
                 // append, unless already reported by earlier tools
                 if (in_array($ip, $ips)) { continue; }
@@ -212,6 +228,175 @@ class discoverCameras extends Controller {
         data::responseJSON($status, 'err', $res);
     }
 
+
+    /**
+     * Descoberta ONVIF (WS-Discovery) implementada direto em PHP.
+     *
+     * Existe porque as duas ferramentas externas que o upstream usa não estão
+     * disponíveis nesta imagem (ver comentário em postData()). O protocolo é
+     * simples: manda um SOAP "Probe" por multicast UDP em 239.255.255.250:3702
+     * e coleta as respostas "ProbeMatch" por alguns segundos. Cada aparelho
+     * responde com XAddrs (URL do serviço ONVIF) e Scopes (nome/modelo).
+     *
+     * Devolve exatamente o mesmo formato do node-onvif.js original, pra não
+     * mexer no template nem no JS que consomem isso:
+     *   ipv4 => IP de quem respondeu
+     *   manufacturer => scope onvif://www.onvif.org/name/...
+     *   model_name => scope onvif://www.onvif.org/hardware/...
+     *   ipv4_path => primeira URL de XAddrs (completa)
+     *   ipv4_port => "host:porta"
+     *
+     * Obs.: só funciona com o container em network_mode host — multicast não
+     * atravessa a ponte de rede padrão do Docker.
+     */
+    protected function wsDiscover($timeout = 5)
+    {
+        $res = Array();
+
+        if (!function_exists('socket_create')) {
+            return $res; // extensão sockets ausente — nada a fazer
+        }
+
+        $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        if ($sock === false) { return $res; }
+
+        // Porta efêmera: as respostas voltam em unicast pra porta de origem.
+        @socket_bind($sock, '0.0.0.0', 0);
+        @socket_set_option($sock, IPPROTO_IP, IP_MULTICAST_TTL, 4);
+        @socket_set_option($sock, SOL_SOCKET, SO_RCVTIMEO, Array('sec' => 1, 'usec' => 0));
+
+        $uuid = sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
+
+        $probe = '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope"'
+            . ' xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing"'
+            . ' xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"'
+            . ' xmlns:dn="http://www.onvif.org/ver10/network/wsdl">'
+            . '<e:Header>'
+            . '<w:MessageID>uuid:' . $uuid . '</w:MessageID>'
+            . '<w:To e:mustUnderstand="true">urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>'
+            . '<w:Action e:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>'
+            . '</e:Header>'
+            . '<e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body>'
+            . '</e:Envelope>';
+
+        @socket_sendto($sock, $probe, strlen($probe), 0, '239.255.255.250', 3702);
+
+        $deadline = time() + $timeout;
+        $seen = Array();
+
+        while (time() < $deadline) {
+            $buf = '';
+            $from = '';
+            $port = 0;
+
+            // Bloqueia no máximo 1s (SO_RCVTIMEO) e volta pro laço, pra respeitar
+            // o $deadline mesmo quando ninguém mais responde.
+            if (@socket_recvfrom($sock, $buf, 65535, 0, $from, $port) === false) {
+                continue;
+            }
+            if (empty($buf)) { continue; }
+
+            // Namespaces variam entre fabricantes (d:, wsd:, sem prefixo...),
+            // então casa pelo nome local da tag em vez de usar um parser XML
+            // amarrado a prefixo.
+            if (!preg_match('/<[^>]*XAddrs[^>]*>([^<]+)</i', $buf, $m)) { continue; }
+
+            $xaddrs = trim($m[1]);
+            if ($xaddrs === '') { continue; }
+
+            // Algumas câmeras (Hikvision) devolvem várias URLs no mesmo campo,
+            // incluindo IPv6. Fica com a primeira, igual o node-onvif.js fazia.
+            $url = trim(explode(' ', $xaddrs)[0]);
+
+            $parts = @parse_url($url);
+            if (empty($parts['host'])) { continue; }
+
+            $ip = $parts['host'];
+            if (isset($seen[$ip])) { continue; }
+            $seen[$ip] = true;
+
+            $url_port = (!empty($parts['port'])) ? $parts['port'] : 80;
+
+            $manufacturer = '';
+            $model_name = '';
+            if (preg_match('/<[^>]*Scopes[^>]*>([^<]+)</i', $buf, $sm)) {
+                foreach (preg_split('/\s+/', trim($sm[1])) as $scope) {
+                    if (strpos($scope, 'onvif://www.onvif.org/name/') === 0) {
+                        $manufacturer = rawurldecode(substr($scope, 27));
+                    } else if (strpos($scope, 'onvif://www.onvif.org/hardware/') === 0) {
+                        $model_name = rawurldecode(substr($scope, 31));
+                    }
+                }
+            }
+
+            $res[] = Array(
+                'ipv4'         => $ip,
+                'manufacturer' => $manufacturer,
+                'model_name'   => $model_name,
+                'ipv4_path'    => $url,
+                'ipv4_port'    => $ip . ':' . $url_port,
+            );
+        }
+
+        @socket_close($sock);
+
+        return $res;
+    }
+
+    /**
+     * Pega as URLs RTSP (principal e extra) de uma câmera ONVIF, usando a
+     * biblioteca ONVIF em PHP que já vem no pacote (www/lib/Ponvif.php).
+     *
+     * Mesmo motivo do wsDiscover(): o caminho original dependia do Node
+     * (getRtspUrls.js) ou de um binário que não é instalado.
+     *
+     * $addr no formato "host:porta". Devolve array de URLs na ordem dos perfis
+     * (índice 0 = principal, 1 = extra), ou array vazio se não conseguir.
+     */
+    protected function onvifStreamUris($addr, $username, $password)
+    {
+        $uris = Array();
+
+        try {
+            $ponvif = new Ponvif();
+            $ponvif->setIPAddress($addr);
+            $ponvif->setUsername($username);
+            $ponvif->setPassword($password);
+
+            $init = $ponvif->initialize();
+            if (empty($init['onvif']) || empty($init['datetime'])) {
+                return $uris;
+            }
+
+            $sources = $ponvif->getSources();
+            if (empty($sources) || $ponvif->isFault($sources)) {
+                return $uris;
+            }
+
+            // $sources[<fonte>][<perfil>]['profiletoken'] — ver
+            // Ponvif::_getProfileData(). Usa a primeira fonte de vídeo.
+            foreach ($sources[0] as $key => $profile) {
+                // A chave 'sourcetoken' convive com os índices numéricos dos
+                // perfis no mesmo array; só interessam os numéricos.
+                if (!is_int($key) || empty($profile['profiletoken'])) { continue; }
+
+                $uri = $ponvif->media_GetStreamUri($profile['profiletoken']);
+                if (!empty($uri) && is_string($uri)) {
+                    $uris[] = $uri;
+                }
+            }
+        } catch (Exception $e) {
+            return Array();
+        }
+
+        return $uris;
+    }
 
     protected function curlReq($url) {
         $ch=curl_init();
@@ -316,32 +501,31 @@ class discoverCameras extends Controller {
                     $onvif_password = $password;
 
                     try {
-                        $json_out = shell_exec("node /usr/share/bluecherry/onvif/getRtspUrls.js " . escapeshellarg($onvif_addr) .' '. escapeshellarg($onvif_username) .' '. escapeshellarg($onvif_password));
-                        if ($json_out) {
-                            $urls = json_decode($json_out, /*associative=*/true);
-                            $main_stream = $urls[0]['rtspUri'];
-                            $sub_stream = $urls[1]['rtspUri'];
-                        } else {
-                            // Caminho estava errado: /usr/lib/bluecherry/onvif_tool não
-                            // existe. O binário instalado pelo pacote fica em
-                            // /usr/share/bluecherry/onvif/discovery_json/onvif_tool —
-                            // é inclusive o mesmo caminho já usado corretamente na
-                            // descoberta, em postData() (ver array $tools acima).
-                            // Sem isso, esse fallback (usado quando o getRtspUrls.js
-                            // do Node falha) nunca funcionava.
-                            $p = @popen("/usr/share/bluecherry/onvif/discovery_json/onvif_tool " . escapeshellarg($onvif_addr) .' '. escapeshellarg($onvif_username) .' '. escapeshellarg($onvif_password). " get_stream_urls", "r");
-                             if (!$p)
-                                    break;
+                        $main_stream = '';
+                        $sub_stream = '';
 
-                             $media_service = fgets($p);
-                             if (!$media_service)
-                             {
-                                     $err['onvif_ip'][] = $ip;
-                                     break(2);
-                             }
-                             $main_stream = fgets($p);
-                             $sub_stream = fgets($p);
-                             pclose($p);
+                        // Caminho principal: biblioteca ONVIF em PHP que já vem no
+                        // pacote (ver onvifStreamUris()). Substitui o par
+                        // node/getRtspUrls.js + binário onvif_tool do upstream, que
+                        // não existem nesta imagem — sem isto, "Add selected
+                        // cameras" falhava em todas as câmeras, mesmo com a
+                        // descoberta funcionando.
+                        $uris = $this->onvifStreamUris($onvif_addr, $onvif_username, $onvif_password);
+
+                        if (!empty($uris)) {
+                            $main_stream = $uris[0];
+                            $sub_stream = (isset($uris[1])) ? $uris[1] : '';
+                        } else {
+                            // Reforço: se alguém instalar o pacote bluecherry-node-onvif
+                            // depois, esse caminho volta a funcionar sozinho.
+                            $json_out = @shell_exec("node /usr/share/bluecherry/onvif/getRtspUrls.js " . escapeshellarg($onvif_addr) .' '. escapeshellarg($onvif_username) .' '. escapeshellarg($onvif_password));
+                            if ($json_out) {
+                                $urls = json_decode($json_out, /*associative=*/true);
+                                if (!empty($urls[0]['rtspUri'])) {
+                                    $main_stream = $urls[0]['rtspUri'];
+                                    $sub_stream = (!empty($urls[1]['rtspUri'])) ? $urls[1]['rtspUri'] : '';
+                                }
+                            }
                         }
 
 			if ($main_stream)
