@@ -19,8 +19,28 @@ onvif_events::onvif_events()
 
 void onvif_events::run(struct bc_record *r)
 {
-	while(!exit_flag)
-		run_onvif_tool(r);
+	// Este caminho está desativado de propósito (G2W Monitor).
+	//
+	// run_onvif_tool() executa /usr/lib/bluecherry/onvif_tool, binário que o
+	// pacote NUNCA instala (dpkg -L bluecherry só traz scripts; /usr/lib/
+	// bluecherry/ tem apenas ffmpeg, as libs e ptzcmd). Como o laço abaixo não
+	// tem espera nenhuma entre tentativas, marcar "Trigger recording on ONVIF
+	// events" fazia o servidor criar processos sem parar pra rodar um programa
+	// inexistente — queimando CPU justamente na opção que existe pra
+	// economizá-la.
+	//
+	// A função foi substituída por uma ponte em PHP, que fala ONVIF de verdade
+	// (CreatePullPointSubscription + PullMessages) e dispara o mesmo gatilho
+	// interno: misc/onvif/onvif-event-bridge.php, supervisionada por
+	// misc/onvif/onvif-event-supervisor.php e iniciada pelo entrypoint.
+	//
+	// Mantido o método run_onvif_tool() logo abaixo, sem chamador, caso um dia
+	// o binário passe a ser distribuído.
+	r->log.log(Info, "ONVIF events handled by the external bridge; "
+			"in-server onvif_tool path is disabled");
+
+	while (!exit_flag)
+		sleep(60);
 }
 
 void onvif_events::run_onvif_tool(struct bc_record *r)

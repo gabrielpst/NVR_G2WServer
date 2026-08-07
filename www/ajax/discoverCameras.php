@@ -230,6 +230,100 @@ class discoverCameras extends Controller {
 
 
     /**
+     * POST /discover-cameras/probe — busca ONVIF unicast num endereço digitado.
+     *
+     * A descoberta automática é por broadcast (WS-Discovery) e nem toda câmera
+     * se anuncia: a 192.168.4.11 testada, por exemplo, declara em
+     * GetCapabilities `DiscoveryResolve: false` / `RemoteDiscovery: false` e
+     * nunca aparece na lista — mesmo com o ONVIF dela funcionando perfeitamente
+     * em /onvif/device_service. Sem este caminho, esses aparelhos ficam
+     * impossíveis de cadastrar pela tela.
+     *
+     * Devolve no mesmo formato do postData(), pra linha entrar na mesma tabela
+     * e o "Add selected cameras" funcionar sem alteração.
+     */
+    public function postProbe()
+    {
+        $ip       = trim(Inp::post('probe_ip'));
+        $port     = trim(Inp::post('probe_port'));
+        $login    = Inp::post('probe_login');
+        $password = Inp::post('probe_password');
+
+        if ($ip === '') {
+            data::responseJSON('F', PROBE_IP_NEED_ADDR, Array());
+        }
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            data::responseJSON('F', PROBE_IP_BAD_ADDR, Array());
+        }
+        // Porta inválida/vazia cai no padrão ONVIF em vez de recusar o pedido.
+        if ($port === '' || !ctype_digit($port) || (int)$port < 1 || (int)$port > 65535) {
+            $port = '80';
+        }
+
+        $addr = $ip . ':' . $port;
+
+        $ponvif = new Ponvif();
+        $ponvif->setIPAddress($addr);
+        $ponvif->setUsername($login);
+        $ponvif->setPassword($password);
+
+        // Três desfechos bem diferentes, cada um com sua mensagem: aparelho não
+        // respondeu, respondeu mas recusou a senha, respondeu mas não tem canal.
+        // Sem essa distinção o usuário fica adivinhando qual dos três aconteceu.
+        try {
+            $init = $ponvif->initialize();
+        } catch (Exception $e) {
+            data::responseJSON('F', PROBE_IP_UNREACHABLE, Array());
+        }
+
+        if (empty($init['datetime'])) {
+            data::responseJSON('F', PROBE_IP_UNREACHABLE, Array());
+        }
+
+        // initialize() só devolve 'profiles' quando GetProfiles não trouxe nada;
+        // ali dentro o campo 'auth' distingue recusa de credencial.
+        if (isset($init['profiles']['auth']) && $init['profiles']['auth'] === false) {
+            data::responseJSON('F', PROBE_IP_BAD_AUTH, Array());
+        }
+
+        $channels = $this->onvifStreamUris($addr, $login, $password);
+        if (empty($channels)) {
+            data::responseJSON('F', PROBE_IP_NO_CHANNELS, Array());
+        }
+
+        $manufacturer = '';
+        $model_name   = '';
+        try {
+            $info = $ponvif->core_GetDeviceInformation();
+            if (is_array($info)) {
+                $manufacturer = isset($info['Manufacturer']) ? $info['Manufacturer'] : '';
+                $model_name   = isset($info['Model']) ? $info['Model'] : '';
+            }
+        } catch (Exception $e) {
+            // Fabricante/modelo é só rótulo — não impede cadastrar.
+        }
+
+        $exist = $this->existDevices(Array($ip));
+
+        $res = Array(Array(
+            'ipv4'         => $ip,
+            'manufacturer' => $manufacturer,
+            'model_name'   => $model_name,
+            'ipv4_path'    => 'http://' . $addr . '/onvif/device_service',
+            'ipv4_port'    => $addr,
+            'exists'       => (in_array($ip, $exist)) ? 1 : 0,
+            // Extras que só a busca por IP tem: quantos canais o aparelho
+            // expõe (um DVR devolve vários) e as credenciais já validadas, que
+            // o JS usa pra preencher a linha e poupar o usuário de redigitar.
+            'channels'     => count($channels),
+            'login'        => $login,
+            'password'     => $password,
+        ));
+
+        data::responseJSON('OK', PROBE_IP_FOUND, $res);
+    }
+
+    /**
      * Descoberta ONVIF (WS-Discovery) implementada direto em PHP.
      *
      * Existe porque as duas ferramentas externas que o upstream usa não estão

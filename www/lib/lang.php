@@ -347,6 +347,21 @@ define('CLICK_HERE_TO_UPDATE', '[Yes]');
 define('AIP_HEADER', 'Add an IP Camera');
 define('DISCOVER_IP_CAMERAS', 'Discover IP Cameras');
 
+#busca por IP (camera que nao se anuncia via WS-Discovery)
+define('PROBE_IP_HEADER', 'Search by IP address');
+define('PROBE_IP_INTRO', 'Some cameras never announce themselves on the network, so the automatic search above will never list them (their ONVIF still works normally). If you know the address, look it up directly here.');
+define('PROBE_IP_ADDR', 'IP address');
+define('PROBE_IP_PORT', 'ONVIF port');
+define('PROBE_IP_LOGIN', 'Username');
+define('PROBE_IP_PASSWORD', 'Password');
+define('PROBE_IP_BUTTON', 'Search this address');
+define('PROBE_IP_NEED_ADDR', 'Please enter the IP address.');
+define('PROBE_IP_BAD_ADDR', 'That does not look like a valid IP address.');
+define('PROBE_IP_UNREACHABLE', 'No ONVIF device answered at that address and port. Check the IP, the ONVIF port (often 80, sometimes 8000 or 8899) and whether ONVIF is enabled on the device.');
+define('PROBE_IP_BAD_AUTH', 'The device answered, but rejected this username/password.');
+define('PROBE_IP_NO_CHANNELS', 'The device answered and accepted the credentials, but reported no video channel.');
+define('PROBE_IP_FOUND', 'Device found. Review it in the list above and click "Add selected cameras".');
+
 #find rtmp streams (relay MediaMTX)
 define('FIND_RTMP_HEADER', 'Find RTMP streams');
 define('FIND_RTMP_INTRO', 'Cameras that only speak RTMP push their stream to the relay, which re-serves it as RTSP for the server to record. Use this page to see what is publishing right now — useful when the camera builds the stream path on its own (some use their serial number) and you cannot guess it.');

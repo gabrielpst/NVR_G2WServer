@@ -68,3 +68,74 @@ function discoverCamerasAdded(form, msg) {
 function discoverCamerasClearList(form) {
     $('#discover-cameras-list').find('tr').not('#discover-cameras-list-bl-orig').remove();
 }
+
+/*
+ * Resultado da busca por IP. A linha entra na MESMA tabela da busca automática,
+ * com usuário/senha já preenchidos, pra reaproveitar o "Add selected cameras"
+ * sem mudança nenhuma — ver postProbe() em www/ajax/discoverCameras.php.
+ */
+function discoverCamerasProbed(form, msg) {
+    var box = $('.discover-cameras-probe-result');
+
+    // status 7 = erro; a mensagem específica (não respondeu / senha recusada /
+    // sem canal) já vem do servidor, é só mostrar.
+    if (!msg || parseInt(msg.status) !== 6 || !msg.data || !msg.data.length) {
+        var err = (msg && msg.msg && msg.msg.length) ? msg.msg[0] : 'Search failed.';
+        box.attr('class', 'discover-cameras-probe-result alert alert-danger').text(err).show();
+        return;
+    }
+
+    var val = msg.data[0];
+    var list_bl_orig = $('#discover-cameras-list-bl-orig');
+
+    // Índice novo, sem colidir com as linhas que a busca automática criou.
+    var idx = 'p' + $('#discover-cameras-list').find('tr').length;
+
+    // Se o mesmo IP já está listado, substitui a linha em vez de duplicar —
+    // o caso comum é procurar de novo depois de corrigir a senha.
+    $('#discover-cameras-list')
+        .find('.discover-cameras-item-ipv4[value="' + val.ipv4 + '"]')
+        .closest('tr').remove();
+
+    var bl_clone = list_bl_orig.clone();
+    bl_clone.removeAttr('id');
+    bl_clone.attr('data-id', idx);
+
+    var label = (val.manufacturer || val.model_name)
+        ? ((val.manufacturer + ' ' + val.model_name).trim())
+        : 'ONVIF device';
+    if (val.channels > 1) {
+        label += ' — ' + val.channels + ' channels';
+    }
+
+    bl_clone.find('.discover-cameras-item-manuf-name').text(label);
+    bl_clone.find('.discover-cameras-item-ipv4-disp').text(val.ipv4);
+
+    var checkbox = bl_clone.find('.discover-cameras-item-cameras');
+    checkbox.attr('name', 'cameras[' + idx + ']');
+
+    bl_clone.find('.discover-cameras-item-ipv4-path').attr('name', 'ipv4_path[' + idx + ']').val(val.ipv4_path);
+    bl_clone.find('.discover-cameras-item-ipv4').attr('name', 'ipv4[' + idx + ']').val(val.ipv4);
+    bl_clone.find('.discover-cameras-item-ipv4-port').attr('name', 'ipv4_port[' + idx + ']').val(val.ipv4_port);
+    bl_clone.find('.discover-cameras-item-manufacturer').attr('name', 'manufacturer[' + idx + ']').val(val.manufacturer);
+    bl_clone.find('.discover-cameras-item-model-name').attr('name', 'model_name[' + idx + ']').val(val.model_name);
+
+    // Credenciais já validadas pelo probe: preenche e deixa à vista, pra ficar
+    // claro que é com elas que o cadastro vai ser feito.
+    bl_clone.find('.discover-cameras-item-login').attr('name', 'login[' + idx + ']').val(val.login);
+    bl_clone.find('.discover-cameras-item-password').attr('name', 'password[' + idx + ']').val(val.password);
+    bl_clone.find('.discover-cameras-item-auth').show();
+
+    if (val.exists == 1) {
+        checkbox.prop('disabled', true);
+    } else {
+        checkbox.prop('checked', true);
+    }
+
+    bl_clone.show();
+    list_bl_orig.after(bl_clone);
+
+    box.attr('class', 'discover-cameras-probe-result alert alert-success')
+       .text((msg.msg && msg.msg.length) ? msg.msg[0] : 'Device found.')
+       .show();
+}
