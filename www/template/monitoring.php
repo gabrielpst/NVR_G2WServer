@@ -267,10 +267,26 @@
             
             xhr.onload = function() {
                 if (xhr.status === 200) {
+                    // Separado do processamento abaixo de propósito: um erro real
+                    // de JSON (resposta malformada) e um erro dentro de uma das
+                    // funções update*() (ex: formato inesperado de um campo) são
+                    // coisas bem diferentes pra debugar — antes os dois caíam no
+                    // mesmo catch e apareciam como "Failed to parse JSON" mesmo
+                    // quando o parse funcionou normal (achado real: era esse o
+                    // caso do gráfico de histórico, ver updatePerformanceCharts).
+                    let data;
                     try {
-                        const data = JSON.parse(xhr.responseText);
-                        console.log('Stats loaded successfully:', data);
-                        
+                        data = JSON.parse(xhr.responseText);
+                    } catch (e) {
+                        console.error('Invalid JSON response:', e);
+                        console.error('Response text:', xhr.responseText);
+                        document.getElementById('server-status').innerHTML = '<span class="text-danger">Invalid server response</span>';
+                        return;
+                    }
+
+                    console.log('Stats loaded successfully:', data);
+
+                    try {
                         // Update all components
                         if (data.live) {
                             updateLiveStats(data.live);
@@ -288,14 +304,14 @@
                             updateNetworkTrafficChart(data.network_traffic);
                         }
                         updateStatus(data);
-                        
+
                         // Reset retry counter on success
                         retryCount = 0;
-                        
+
                     } catch (e) {
-                        console.error('Failed to parse JSON:', e);
+                        console.error('Error updating dashboard:', e);
                         console.error('Response text:', xhr.responseText);
-                        document.getElementById('server-status').innerHTML = '<span class="text-danger">Error parsing data</span>';
+                        document.getElementById('server-status').innerHTML = '<span class="text-danger">Error updating dashboard</span>';
                     }
                 } else {
                     console.error('HTTP Error:', xhr.status);
@@ -350,17 +366,26 @@
         }
         
         function updatePerformanceCharts(historical) {
-            if (!historical || historical.length === 0) {
+            // O backend (ajax/stats.php, getHistoricalStats()) ainda não
+            // implementa histórico de verdade — sempre devolve um objeto
+            // {range, data: [], message: "..."}, nunca um array puro. Bug de
+            // integração real (pré-existente, não introduzido nesse fork):
+            // "historical" nunca foi um array, então historical.forEach()
+            // sempre estourava TypeError, com a mensagem de erro genérica
+            // "Failed to parse JSON" escondendo o problema real (o parse do
+            // JSON funcionava normal, quebrava só depois, nessa função).
+            const points = (historical && Array.isArray(historical.data)) ? historical.data : [];
+            if (points.length === 0) {
                 return;
             }
-            
+
             // Prepare data
             const labels = [];
             const cpuData = [];
             const memoryData = [];
             const diskData = [];
-            
-            historical.forEach(function(point) {
+
+            points.forEach(function(point) {
                 const date = new Date(point.timestamp * 1000);
                 labels.push(date.toLocaleTimeString());
                 cpuData.push(point.cpu !== null ? point.cpu : null);
