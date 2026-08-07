@@ -1,20 +1,14 @@
 
 <div class="row" style="padding: 20px 0;">
     <div class="col-lg-offset-2 col-lg-8 col-md-offset-0 col-md-12">
-        <div class="alert alert-info" role="alert">By default, Bluecherry uses the standard 'snakeoil' automated SSL 
-        certificates installed by your operating system. These keys are inherently not secure as there is no third party 
+        <div class="alert alert-info" role="alert">By default, G2W Monitor uses the standard 'snakeoil' automated SSL
+        certificates installed by your operating system. These keys are inherently not secure as there is no third party
         authentication to validate the keys.
         <br>
-        Starting in 3.1.0 Bluecherry supports automatic creation of secure (TLS) certificates via Lets Encrypt (letsencrypt.
-        org). Additionally, we provide you a cname DNS entry (i.e - smithcams.bluecherry.app) that is associated with your 
-        purchased license key.
-        <br>
-        To enable this, you need the following:
-            <ul>
-                <li>At least port 7001 opened to the outside world on your firewall.</li>
-                <li>An email address for LetsEncrypt to contact you if there is some issue (we do not collect this email address).</li>
-                <li>A paid Bluecherry license, the community edition is not supported in this automated setup.</li>
-            </ul>
+        <strong>Note:</strong> automatic TLS certificate + subdomain provisioning below is a hosted service operated by
+        the original Bluecherry project (requires their own paid license and a cname under bluecherry.app) — it is not
+        something G2W Monitor operates or resells. Left in place as-is since it's an optional feature that calls out to
+        their infrastructure directly; recommended to leave disabled unless you have your own arrangement with them.
         </div>
 
         <?php if (isset($_GET['status'])) {

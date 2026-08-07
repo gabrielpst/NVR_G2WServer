@@ -18,7 +18,7 @@
  */
 
 #company global
-define('DVR_COMPANY_NAME', 'Bluecherry');
+define('DVR_COMPANY_NAME', 'G2W Monitor');
 define('DVR_DVR', 'DVR');
 
 #headers
@@ -124,7 +124,7 @@ define('G_SMTP_PORT', 'SMTP port');
 define('G_SMTP_SSL', 'SSL');
 define('G_SMTP_TRANSPORT_SECURITY', 'Transport Security');
 define('G_SMTP_SERVICE_EX', '');
-define('G_SMTP_EMAIL_FROM_EX', 'When Bluecherry service sends email, this value is used as sender address ("From")');
+define('G_SMTP_EMAIL_FROM_EX', 'When G2W Monitor service sends email, this value is used as sender address ("From")');
 define('G_SMTP_USERNAME_EX', '');
 define('G_SMTP_PASSWORD_EX', '');
 define('G_SMTP_HOST_EX', 'e.g smtp.googlemail.com');
@@ -223,7 +223,7 @@ define('NA_CLIENT', 'You do not have permission to use remote client');
 define('WARN_DEFAULT_PASSWORD', 'You have not changed the default password on this system. For security we highly recommend <a id="updateAdminPassword" href="#">updating your password</a>.');
 
 #devices
-define('CARD_HEADER', 'Bluecherry hardware compression');
+define('CARD_HEADER', 'Hardware compression');
 define('CARD_CHANGE_ENCODING', 'click to change encoding');
 define('LOCAL_DEVICES', 'Local devices:');
 define('PORT', 'Port');
@@ -407,13 +407,13 @@ define('IPCAM_DEBUG_LEVEL', 'Turn camera debugging on:');
 define('DEVICE_EDIT_DETAILS', 'Properties');
 define('DELETE_CAM', 'Delete');
 define('PROPS_HEADER', 'IP Camera properties');
-define('IPCAM_WIKI_LINK', 'Is your IP camera not in the list?  We maintain a larger list of MJPEG and RTSP paths <a href="https://www.bluecherrydvr.com/supported-ip-cameras/">here</a>.  If you run into problems, please <a href="https://www.bluecherrydvr.com/chat"> join us on Gitter or Matrix (https://www.bluecherrydvr.com/chat/)</a> and we\'ll try to add support for your camera.');
+define('IPCAM_WIKI_LINK', 'Is your IP camera not in the list? If you run into problems, please <a href="https://wa.me/5567996086281">contact G2W support on WhatsApp</a> and we\'ll try to add support for your camera.');
 define('SERVER_NOT_RUNNING', 'Server process stopped.');
 define('SERVER_RUNNING', 'Server process running');
 define('NOT_UP_TO_DATE', 'New version available.');
 define('UP_TO_DATE', 'Version');
 define('NOT_UP_TO_DATE_LONG', 'New version of the server was released. We strongly recommend to update.');
-define('NOT_UP_TO_DATE_LINK', 'For release notes and update instructions, please visit our <a href="http://forums.bluecherrydvr.com/index.php?/forum/27-announcements/">forums</a>.');
+define('NOT_UP_TO_DATE_LINK', 'Contact G2W support for release notes and update instructions.');
 define('WANT_TO_LEARN_MORE', 'Learn more...');
 define('INSTALLED', 'Installed');
 define('CURR', 'Current');
@@ -482,7 +482,7 @@ define('MAP_PRESET', 'New preset...');
 #logs
 define('LOG_APACHE', 'Apache web server log');
 define('LOG_PHP', 'PHP Error log');
-define('LOG_BC', 'Bluecherry log');
+define('LOG_BC', 'Server log');
 
 #ipcam statuses
 define('IP_ACCESS_STATUS_F', 'Could not connect to the <b>%TYPE%</b>. Please verify that the camera is turned on and the IP address is correct.');
@@ -621,20 +621,20 @@ define('L_PORTS', 'Ports');
 define('L_CONFIRM_LICENSE_KEY', 'Confirm a license key');
 define('L_DEACTIVATE', 'Deactivate');
 
-define('L_CONFIRMCODE_MSG', 'Unfortunately we could not confirm the license key automatically. Please check your internet connection and try again, or <a href="mailto:support@bluecherrydvr.com">contact</a> Bluecherry to obtain authorization license key using this unique id: ');
-define('L_INVALID_LICENSE', 'The license key you entered does not appear to be valid. Please make sure that it is typed in or copied exactly as provided. If you continue to experience this problem, please <a href="mailto:support@bluecherrydvr.com">contact</a> Bluecherry.');
+define('L_CONFIRMCODE_MSG', 'Unfortunately we could not confirm the license key automatically. Please check your internet connection and try again, or <a href="mailto:contato@g2wseguranca.com.br">contact G2W support</a> using this unique id: ');
+define('L_INVALID_LICENSE', 'The license key you entered does not appear to be valid. Please make sure that it is typed in or copied exactly as provided. If you continue to experience this problem, please <a href="mailto:contato@g2wseguranca.com.br">contact G2W support</a>.');
 define('L_INVALID_LICENSE_EXISTS', 'The license key you entered is already in use on this system.');
-define('L_INVALID_CONFIRMATION', 'Confirmation license key you entered is invalid. Please make sure that it is typed in or copied exactly as provided. If you continue to experience this problem, please <a href="mailto:support@bluecherrydvr.com">contact</a> Bluecherry.');
+define('L_INVALID_CONFIRMATION', 'Confirmation license key you entered is invalid. Please make sure that it is typed in or copied exactly as provided. If you continue to experience this problem, please <a href="mailto:contato@g2wseguranca.com.br">contact G2W support</a>.');
 
 define('L_CURRENT',  'Active license key');
 define('L_CONFIRM', 'Confirm');
 define('L_CONFIRM_DELETE', 'Are you sure you want to deactivate this license key?');
 define('L_NO_LICENSES', 'You have no active License key.');
 define('L_AUTO_RESP_1', 'This license key does not exist.');
-define('L_AUTO_RESP_2', 'This key was already used on a different machine. If you recently made changes to your computer configuration, please <a href="mailto:support@bluecherrydvr.com">contact Bluecherry</a> to reset your license.');
-define('L_AUTO_RESP_3', 'Sorry, you made too many unsuccessful authorization attempts per day. Please <a href="mailto:support@bluecherrydvr.com">contact Bluecherry</a> or try again later.');
-define('L_AUTO_RESP_4', 'Sorry, you need to contact Bluecherry via phone or email to obtain authorization.');
-define('L_AUTO_RESP_5', 'Sorry, an error was encountered while authorizing your license. Please try again later or <a href="mailto:support@bluecherrydvr.com">contact Bluecherry</a>.');
+define('L_AUTO_RESP_2', 'This key was already used on a different machine. If you recently made changes to your computer configuration, please <a href="mailto:contato@g2wseguranca.com.br">contact G2W support</a> to reset your license.');
+define('L_AUTO_RESP_3', 'Sorry, you made too many unsuccessful authorization attempts per day. Please <a href="mailto:contato@g2wseguranca.com.br">contact G2W support</a> or try again later.');
+define('L_AUTO_RESP_4', 'Sorry, you need to contact G2W support via phone or email to obtain authorization.');
+define('L_AUTO_RESP_5', 'Sorry, an error was encountered while authorizing your license. Please try again later or <a href="mailto:contato@g2wseguranca.com.br">contact G2W support</a>.');
 
 define('L_LA_OK', 'Success code.');
 define('L_LA_FAIL', 'Operation failed.');
@@ -709,7 +709,7 @@ define('L_ENABLE', 'enable');
 define('L_DISABLE', 'disable');
 define('DB_SYNC_BUTTON', 'Sync Database');
 
-define('BETA_LICENSE_WARNING', 'Bluecherry DVR is now free and open source software.<br>');
+define('BETA_LICENSE_WARNING', 'G2W Monitor is free and open source software.<br>');
 
 #ip cam props
 define('IPCAM_TCPUDP_LEVEL', 'Transport');
@@ -727,7 +727,7 @@ define('WEBHOOK_FORM_FIELD_CAMERAS', 'Cameras');
 define('WEBHOOK_FORM_FIELD_ENABLED', 'Enabled');
 define('WEBHOOK_FORM_FIELD_EVENT_MOTION_EVENT', 'Motion Event');
 define('WEBHOOK_FORM_FIELD_EVENT_DEVICE_STATE', 'Device Status');
-define('WEBHOOK_FORM_FIELD_EVENT_SOLO', 'Bluecherry analog capture card (solo)');
+define('WEBHOOK_FORM_FIELD_EVENT_SOLO', 'Analog capture card (solo)');
 define('WEBHOOK_FORM_BUTTON_CREATE', 'Create');
 define('WEBHOOK_FORM_BUTTON_UPDATE', 'Update');
 define('WEBHOOK_LISTING_HEADER', 'Webhook List');

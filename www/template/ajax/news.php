@@ -5,7 +5,7 @@
     </div>
 </div>
 <div class="row news-bl">
-    <div class="col-lg-12 announcekit-widget-embed" style="height: 100vh">
-
+    <div class="col-lg-12">
+        <p>Sem novidades por aqui.</p>
     </div>
 </div>

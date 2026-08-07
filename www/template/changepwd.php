@@ -11,6 +11,7 @@
     <meta name="description" content="<?php echo DVR_COMPANY_NAME; ?>">
     <meta name="author" content="<?php echo DVR_COMPANY_NAME; ?>">
 
+	<link rel="icon" href="/favicon.ico">
 	<title><?php echo DVR_COMPANY_NAME.' '.DVR_DVR.PAGE_HEADER_SEPARATOR.PAGE_HEADER_MAIN; ?></title>
 
     <!-- Bootstrap Core CSS -->

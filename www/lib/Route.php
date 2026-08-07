@@ -40,8 +40,11 @@ class Route
         $url = ltrim($uri['path'], '/');
         //$url = strtolower($url);
         if (empty($url)) {
-            //$url = 'news';
-            $uri['path'] = '/news';
+            // Era '/news' (feed de Announcements embutido via iframe do
+            // AnnounceKit da Bluecherry — carrega o changelog deles a cada
+            // login, vazando IP/UA do usuário pra infra deles). Landing page
+            // agora é o painel de status do sistema, sem chamada externa.
+            $uri['path'] = '/monitoring';
         } else {
             if (preg_match('/ajax\/(.*)\.php/', $url, $matches)) {
                 $old_ajax_url = true;

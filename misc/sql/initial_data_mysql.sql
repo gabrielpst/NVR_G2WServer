@@ -1,12 +1,16 @@
-INSERT INTO Users (`username`, `password`, `salt`, `name`, `email`, `phone`, `notes`, `access_setup`, `access_remote`, `access_web`, `access_backup`, `access_relay`) VALUES ('Admin', 'b22dec1d6cfa580962f3a3796a5dc6b3', '1234', 'Bluecherry Admin', NULL, NULL, NULL, 1, 1, 1, 1, 1);
+INSERT INTO Users (`username`, `password`, `salt`, `name`, `email`, `phone`, `notes`, `access_setup`, `access_remote`, `access_web`, `access_backup`, `access_relay`) VALUES ('Admin', 'b22dec1d6cfa580962f3a3796a5dc6b3', '1234', 'G2W Monitor Admin', NULL, NULL, NULL, 1, 1, 1, 1, 1);
 
-INSERT INTO GlobalSettings VALUES ('G_DVR_NAME', 'Bluecherry DVR v3');
+INSERT INTO GlobalSettings VALUES ('G_DVR_NAME', 'G2W Monitor');
 INSERT INTO GlobalSettings VALUES ('G_DVR_EMAIL', 'root@localhost');
 INSERT INTO GlobalSettings VALUES ('G_DEV_SCED', 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC');
 INSERT INTO GlobalSettings VALUES ('G_DEV_NOTES', '');
 INSERT INTO GlobalSettings VALUES ('G_IPCAMLIST_VERSION', '1.0');
 INSERT INTO GlobalSettings VALUES ('G_LAST_SOFTWARE_VERSION_CHECK', 0);
-INSERT INTO GlobalSettings VALUES ('G_DISABLE_VERSION_CHECK', '0');
+# Desativado por padrão em instalações novas — antes fazia uma checagem
+# automática que mandava um ID de máquina pra versioncheck.bluecherrydvr.com
+# a cada 24h (ver www/lib/var.php e www/template/main_admin.php). Continua
+# dando pra ligar manualmente em Configurações Gerais se quiser.
+INSERT INTO GlobalSettings VALUES ('G_DISABLE_VERSION_CHECK', '1');
 INSERT INTO GlobalSettings VALUES ('G_DISABLE_IP_C_CHECK', '1');
 INSERT INTO GlobalSettings VALUES ('G_DISABLE_WEB_STATS', '0');
 

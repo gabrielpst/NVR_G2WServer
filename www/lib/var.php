@@ -25,14 +25,19 @@ define('VAR_ROOT_PATH', '/');
 define('VAR_LOG_PATH', '/var/log/bluecherry.log');
 define('VAR_WWW_LOG_PATH', '/var/log/nginx/bluecherry-error.log');
 
-define('VAR_NEWS_XML', 'http://www.bluecherrydvr.com/feed/');
+define('VAR_NEWS_XML', ''); # não referenciado em lugar nenhum do código, deixado vazio de propósito
 
 define('VAR_SESSION_NAME', 'bluecherrydvr');
 
 define('JS_RELOAD', '<script>window.location = "/";</script>');
 
 #versions
-define('VAR_PATH_TO_CURRENT_VERSION', 'http://versioncheck.bluecherrydvr.com/server-version');
+# Repontado pra fora da infra da Bluecherry (era um phone-home automático que
+# mandava um ID de máquina pra versioncheck.bluecherrydvr.com a cada 24h — ver
+# G_DISABLE_VERSION_CHECK, que agora vem desativado por padrão em instalações
+# novas). G2W ainda não tem servidor de versão próprio — path inerte de
+# propósito, não vaza dado pra ninguém se alguém reativar a checagem.
+define('VAR_PATH_TO_CURRENT_VERSION', 'https://monitor.g2wseguranca.com.br/version-check');
 define('VAR_PATH_TO_INSTALLED_VERSION', '/usr/share/bluecherry/version');
 
 define('VAR_PATH_TO_IPCAMLIST_VERSION', 'http://versioncheck.bluecherrydvr.com/ipcamtableversion');
@@ -46,7 +51,7 @@ define('VAR_MYSQLDUMP_TMP_LOCATION', '/tmp/bluecherry-backup.tgz');
 define('VAR_PATH_TO_IPCAMLIST_UPDATE', 'http://versioncheck.bluecherrydvr.com/ipcamlistupdate.php');
 define('VAR_IPCAMLIST_UPDATE_TOKEN', 'Hiuhg3TnbJl1676T');
 
-define('RM_CLIENT_DOWNLOAD', 'http://www.bluecherrydvr.com/downloads');
+define('RM_CLIENT_DOWNLOAD', 'https://github.com/gabrielpst/unity_g2w/releases');
 
 define('VAR_LICENSE_AUTH', 'http://keycheck.bluecherrydvr.com');
 

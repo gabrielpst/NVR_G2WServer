@@ -224,7 +224,7 @@
 
 <div class="row">
     <div class="col-lg-12">
-        <a href="javascript:void(0);" class="btn btn-default" id="report-incorrect-data" >
+        <a href="https://wa.me/5567996086281" target="_blank" class="btn btn-default" id="report-incorrect-data">
             Report incorrect information
         </a>
     </div>
@@ -233,9 +233,6 @@
 
 <div class="row">
     <div class="col-lg-12">
-        <div id="wufoo-z1ws6wwb1p41rs9" style="display: none">
-            Fill out my <a href="https://bluecherry.wufoo.com/forms/z1ws6wwb1p41rs9">online form</a>.
-        </div>
     </div>
 </div>
 

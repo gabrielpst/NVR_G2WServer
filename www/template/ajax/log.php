@@ -28,7 +28,7 @@
     
     <form action="/log" method="post">
     <div class="col-lg-4 col-md-4 form-group">
-	    <?php echo arrayToSelect(array('bc' => 'Bluecherry Server Log', 'www' => 'Bluecherry WWW Log'), $type, 'type', 'send-req-form-select', false, 'data-type-data="HTML" data-func-after="logDispData"'); ?>
+	    <?php echo arrayToSelect(array('bc' => 'Server Log', 'www' => 'WWW Log'), $type, 'type', 'send-req-form-select', false, 'data-type-data="HTML" data-func-after="logDispData"'); ?>
     </div>
     <div class="col-lg-4 col-md-4 form-group">
         <select name="lines" class="form-control send-req-form-select" data-type-data="HTML" data-func-after="logDispData">

@@ -1395,8 +1395,8 @@ class globalSettings{
 
 		if (empty($this->data['G_SMTP_EMAIL_FROM'])) {
 			data::query("DELETE FROM GlobalSettings where parameter = 'G_SMTP_EMAIL_FROM'", true);
-			data::query("INSERT INTO GlobalSettings VALUES('G_SMTP_EMAIL_FROM', 'donotreply@bluecherryserver')", true);
-			$this->data['G_SMTP_EMAIL_FROM'] = 'donotreply@bluecherryserver';
+			data::query("INSERT INTO GlobalSettings VALUES('G_SMTP_EMAIL_FROM', 'donotreply@g2wmonitor')", true);
+			$this->data['G_SMTP_EMAIL_FROM'] = 'donotreply@g2wmonitor';
 		}
 	}
 	public static function getParameter($parameter){

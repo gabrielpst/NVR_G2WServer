@@ -12,7 +12,8 @@
     <meta name="description" content="<?php echo DVR_COMPANY_NAME; ?>">
     <meta name="author" content="<?php echo DVR_COMPANY_NAME; ?>">
 
-    <title><?php echo DVR_COMPANY_NAME.' '.DVR_DVR.PAGE_HEADER_SEPARATOR.PAGE_HEADER_MAIN; ?></title>
+    <link rel="icon" href="/favicon.ico">
+	<title><?php echo DVR_COMPANY_NAME.' '.DVR_DVR.PAGE_HEADER_SEPARATOR.PAGE_HEADER_MAIN; ?></title>
 
     <!-- Bootstrap Core CSS -->
     <link href="/template/bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -120,14 +121,7 @@
                             <a href="javascript:void(0);" class='downloadClient'><i class="fa fa-download fa-fw"></i> <?php echo MMENU_CLIENT_DOWNLOAD; ?></a>
                         </li>
                         <li>
-                            <a href="http://docs.bluecherrydvr.com/"><i class="fa fa-book fa-fw"></i> <?php echo MMENU_DOCUMENTATION; ?></a>
-                        </li>
-
-                        <li class="divider"></li>
-                        <li class="divider"></li>
-
-                        <li>
-                            <a href="/news" data-left-menu="true"><i class="fa fa-dashboard fa-fw"></i> <?php echo MMENU_NEWS; ?>&nbsp; <div class="visible-inline-block announcekit-widget"> </div></a>
+                            <a href="https://github.com/gabrielpst/NVR_G2WServer"><i class="fa fa-book fa-fw"></i> <?php echo MMENU_DOCUMENTATION; ?></a>
                         </li>
 
                         <li class="divider"></li>
@@ -338,23 +332,10 @@
     <script src="/template/dist/js/ptz.js"></script>
     <script src="/template/dist/js/webhook.js"></script>
     <script src="/template/dist/js/subdomainprovider.js"></script>
-    <script>
-        window.announcekit = (window.announcekit || { queue: [], on: function(n, x) { 
-            window.announcekit.queue.push([n, x]); }, push: function(x) { window.announcekit.queue.push(x); } 
-        });
-        
-        window.announcekit.push({
-            "widget": "https://announcekit.co/widgets/v2/SznKU",
-            "selector": ".announcekit-widget"
-        })
-
-        window.announcekit.push({
-            "widget": "https://changelog.bluecherrydvr.com/widgets/v2/1fhia4",
-            "selector": ".announcekit-widget-embed",
-            "embed": true
-        })
-    </script>
-    <script async src="https://cdn.announcekit.app/widget-v2.js"></script>
+    <?php # Widget AnnounceKit removido — carregava o changelog da Bluecherry
+    # (cdn.announcekit.app + changelog.bluecherrydvr.com) automaticamente em
+    # toda página do painel, vazando IP/user-agent do usuário pra infra deles
+    # a cada login. Era a origem da notificação vista no login. ?>
 
     <?php echo getJs(); ?>
 </body>

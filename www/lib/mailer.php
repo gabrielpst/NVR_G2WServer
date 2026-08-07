@@ -156,7 +156,7 @@ Device {$device[0]['device_name']} got $state on server {$global_settings->data[
 		'dvr_name' => $global_settings->data['G_DVR_NAME']
 	));
 
-	$subject = "Status notification for Bluecherry SOLO card(s) on server {$global_settings->data['G_DVR_NAME']}";
+	$subject = "Status notification for SOLO card(s) on server {$global_settings->data['G_DVR_NAME']}";
     
 	$message = new \Swift_Message($subject);
 
