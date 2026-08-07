@@ -356,8 +356,10 @@ class discoverCameras extends Controller {
      * Mesmo motivo do wsDiscover(): o caminho original dependia do Node
      * (getRtspUrls.js) ou de um binário que não é instalado.
      *
-     * $addr no formato "host:porta". Devolve array de URLs na ordem dos perfis
-     * (índice 0 = principal, 1 = extra), ou array vazio se não conseguir.
+     * $addr no formato "host:porta". Devolve um array com um item por canal
+     * (câmera IP = 1 item; DVR/NVR = um por entrada de vídeo), cada um no
+     * formato ['main' => URL do stream principal, 'sub' => URL do extra ou '']
+     * — ou array vazio se não conseguir falar com o aparelho.
      */
     protected function onvifStreamUris($addr, $username, $password)
     {
@@ -379,16 +381,30 @@ class discoverCameras extends Controller {
                 return $uris;
             }
 
+            // Uma "fonte de vídeo" por canal: câmera IP tem uma, DVR/NVR tem
+            // uma por entrada (o Intelbras MHDX_1004-C testado expõe 4).
             // $sources[<fonte>][<perfil>]['profiletoken'] — ver
-            // Ponvif::_getProfileData(). Usa a primeira fonte de vídeo.
-            foreach ($sources[0] as $key => $profile) {
-                // A chave 'sourcetoken' convive com os índices numéricos dos
-                // perfis no mesmo array; só interessam os numéricos.
-                if (!is_int($key) || empty($profile['profiletoken'])) { continue; }
+            // Ponvif::_getProfileData(). Perfil 0 = stream principal,
+            // perfil 1 = stream extra (menor resolução).
+            foreach ($sources as $source) {
+                $ch_uris = Array();
 
-                $uri = $ponvif->media_GetStreamUri($profile['profiletoken']);
-                if (!empty($uri) && is_string($uri)) {
-                    $uris[] = $uri;
+                foreach ($source as $key => $profile) {
+                    // A chave 'sourcetoken' convive com os índices numéricos
+                    // dos perfis no mesmo array; só interessam os numéricos.
+                    if (!is_int($key) || empty($profile['profiletoken'])) { continue; }
+
+                    $uri = $ponvif->media_GetStreamUri($profile['profiletoken']);
+                    if (!empty($uri) && is_string($uri)) {
+                        $ch_uris[] = $uri;
+                    }
+                }
+
+                if (!empty($ch_uris)) {
+                    $uris[] = Array(
+                        'main' => $ch_uris[0],
+                        'sub'  => (isset($ch_uris[1])) ? $ch_uris[1] : '',
+                    );
                 }
             }
         } catch (Exception $e) {
@@ -501,45 +517,43 @@ class discoverCameras extends Controller {
                     $onvif_password = $password;
 
                     try {
-                        $main_stream = '';
-                        $sub_stream = '';
-
                         // Caminho principal: biblioteca ONVIF em PHP que já vem no
                         // pacote (ver onvifStreamUris()). Substitui o par
                         // node/getRtspUrls.js + binário onvif_tool do upstream, que
                         // não existem nesta imagem — sem isto, "Add selected
                         // cameras" falhava em todas as câmeras, mesmo com a
                         // descoberta funcionando.
-                        $uris = $this->onvifStreamUris($onvif_addr, $onvif_username, $onvif_password);
+                        // Um item por canal: câmera IP devolve 1, DVR/NVR devolve
+                        // um por entrada de vídeo.
+                        $channels = $this->onvifStreamUris($onvif_addr, $onvif_username, $onvif_password);
 
-                        if (!empty($uris)) {
-                            $main_stream = $uris[0];
-                            $sub_stream = (isset($uris[1])) ? $uris[1] : '';
-                        } else {
+                        if (empty($channels)) {
                             // Reforço: se alguém instalar o pacote bluecherry-node-onvif
                             // depois, esse caminho volta a funcionar sozinho.
                             $json_out = @shell_exec("node /usr/share/bluecherry/onvif/getRtspUrls.js " . escapeshellarg($onvif_addr) .' '. escapeshellarg($onvif_username) .' '. escapeshellarg($onvif_password));
                             if ($json_out) {
                                 $urls = json_decode($json_out, /*associative=*/true);
                                 if (!empty($urls[0]['rtspUri'])) {
-                                    $main_stream = $urls[0]['rtspUri'];
-                                    $sub_stream = (!empty($urls[1]['rtspUri'])) ? $urls[1]['rtspUri'] : '';
+                                    $channels[] = Array(
+                                        'main' => $urls[0]['rtspUri'],
+                                        'sub'  => (!empty($urls[1]['rtspUri'])) ? $urls[1]['rtspUri'] : '',
+                                    );
                                 }
                             }
                         }
 
-			if ($main_stream)
+                        if (!empty($channels))
                         {
+                            // Credenciais aceitas — não precisa tentar as outras.
                             $password_ch = true;
+                            $added_any = false;
 
-			    $media_uri = trim($main_stream);
+                            foreach ($channels as $ch_idx => $channel) {
+                                $media_uri = trim($channel['main']);
+                                if (empty($media_uri)) { continue; }
 
-                            if (empty($media_uri)) {
-                                $err['rtsp_ip'][] = $ip;
-                            } else {
-                                $err_add = false;
-                                // add camera to db
                                 $media_uri_parse = parse_url($media_uri);
+                                if (empty($media_uri_parse['host'])) { continue; }
 
                                 if (!isset($media_uri_parse['port'])) {
                                     $media_uri_parse['port'] = 554;
@@ -547,35 +561,57 @@ class discoverCameras extends Controller {
 
                                 if (isset($media_uri_parse['query'])) $media_uri_parse['path'] .= '?'.$media_uri_parse['query'];
 
-				if ($sub_stream) {
-				    $sub_parse = parse_url(trim($sub_stream));
-				    $sub_stream = $sub_parse['path'];
-				    if (isset($sub_parse['path'])) $sub_stream .= '?'.$sub_parse['query'];
-				}
+                                // O original montava isso errado: atribuía o path e
+                                // depois concatenava a query dentro de um if que
+                                // testava o PATH (não a query), gerando "?" solto ou
+                                // aviso quando não havia query.
+                                $sub_path = '';
+                                if (!empty($channel['sub'])) {
+                                    $sub_parse = parse_url(trim($channel['sub']));
+                                    if (!empty($sub_parse['path'])) {
+                                        $sub_path = $sub_parse['path'];
+                                        if (isset($sub_parse['query'])) {
+                                            $sub_path .= '?'.$sub_parse['query'];
+                                        }
+                                    }
+                                }
+
+                                // device_name é único no banco. Num DVR/NVR todos os
+                                // canais têm o mesmo host, então sem sufixo só o
+                                // primeiro entraria e os demais falhariam como nome
+                                // duplicado.
+                                $cam_name = $media_uri_parse['host'];
+                                if (count($channels) > 1) {
+                                    $cam_name .= ' - CH' . ($ch_idx + 1);
+                                }
+
                                 $_POST = Array(
                                     'mode' => 'addip',
                                     'models' => 'Generic',
-                                    'camName' => $media_uri_parse['host'],
+                                    'camName' => $cam_name,
                                     'ipAddr' => $media_uri_parse['host'],
                                     'user' => $login,
                                     'pass' => $password,
                                     'protocol' => 'IP-RTSP',
                                     'rtsp' => $media_uri_parse['path'],
                                     'port' => $media_uri_parse['port'],
-				                    'substream' => $sub_stream,
+				                    'substream' => $sub_path,
                                     'prefertcp' => '0',
                                     'mjpeg' => '',
                                     'portMjpeg' => 80
                                 );
 
-                                //print_r($data_camera);
                                 $result = ipCamera::create($_POST);
                                 if ($result[0]) {
-                                    $added_ip[] = $ip;
-                                } else {
-                                    $err['ip'][] = $ip;
+                                    $added_any = true;
                                 }
+                            }
 
+                            if ($added_any) {
+                                $err_add = false;
+                                $added_ip[] = $ip;
+                            } else {
+                                $err['ip'][] = $ip;
                             }
 
                             break(2);

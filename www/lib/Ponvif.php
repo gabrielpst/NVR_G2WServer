@@ -691,10 +691,21 @@ class Ponvif {
       else {
            // NVT is an encoder
            for ($i=0;$i<count($videoSources);$i++) {
-                if (strtolower($videoSources[$i]['@attributes']['SignalActive'])=='true') {
-                        $sources[$i]['sourcetoken']=$videoSources[$i]['@attributes']['token'];
+                // SignalActive é OPCIONAL na especificação ONVIF, e vários
+                // DVR/NVR simplesmente não mandam esse atributo (confirmado com
+                // um Intelbras MHDX_1004-C: 4 canais, nenhum com SignalActive).
+                // O código original tratava a ausência como "inativo" — com
+                // isso nenhuma fonte entrava na lista, getSources() voltava
+                // vazio e o aparelho inteiro ficava impossível de adicionar,
+                // sem nenhuma mensagem de erro. Ausente agora vale como ativo;
+                // só descarta quando o aparelho diz explicitamente que não está.
+                if (isset($videoSources[$i]['@attributes']['SignalActive'])
+                    && strtolower($videoSources[$i]['@attributes']['SignalActive']) != 'true') {
+                        continue;
+                }
+
+                $sources[$i]['sourcetoken']=$videoSources[$i]['@attributes']['token'];
                 $this->_getProfileData($sources,$i,$profiles);
-               }
            } // for
       }
 
@@ -705,13 +716,21 @@ class Ponvif {
         $inprofile=0;
         for ($y=0;$y<count($profiles);$y++) {
             if ($profiles[$y]['VideoSourceConfiguration']['SourceToken']==$sources[$i]['sourcetoken']) {
+                // VideoEncoderConfiguration e seus campos são opcionais na
+                // resposta ONVIF — o Intelbras MHDX, por exemplo, omite tudo
+                // isso no perfil do stream principal. Sem os isset() abaixo,
+                // cada perfil desses gerava 7 warnings de PHP 8 no log (o dado
+                // em si é só informativo, não impede pegar a URL do stream).
+                $enc = isset($profiles[$y]['VideoEncoderConfiguration'])
+                    ? $profiles[$y]['VideoEncoderConfiguration'] : Array();
+
                 $sources[$i][$inprofile]['profiletoken']=$profiles[$y]['@attributes']['token'];
-                $sources[$i][$inprofile]['profiletoken_name']=$profiles[$y]['Name'];
-                $sources[$i][$inprofile]['encoding']=$profiles[$y]['VideoEncoderConfiguration']['Encoding'];
-                $sources[$i][$inprofile]['width']=$profiles[$y]['VideoEncoderConfiguration']['Resolution']['Width'];
-                $sources[$i][$inprofile]['height']=$profiles[$y]['VideoEncoderConfiguration']['Resolution']['Height'];
-                $sources[$i][$inprofile]['fps']=$profiles[$y]['VideoEncoderConfiguration']['RateControl']['FrameRateLimit'];
-                $sources[$i][$inprofile]['bitrate']=$profiles[$y]['VideoEncoderConfiguration']['RateControl']['BitrateLimit'];
+                $sources[$i][$inprofile]['profiletoken_name']=isset($profiles[$y]['Name']) ? $profiles[$y]['Name'] : '';
+                $sources[$i][$inprofile]['encoding']=isset($enc['Encoding']) ? $enc['Encoding'] : '';
+                $sources[$i][$inprofile]['width']=isset($enc['Resolution']['Width']) ? $enc['Resolution']['Width'] : '';
+                $sources[$i][$inprofile]['height']=isset($enc['Resolution']['Height']) ? $enc['Resolution']['Height'] : '';
+                $sources[$i][$inprofile]['fps']=isset($enc['RateControl']['FrameRateLimit']) ? $enc['RateControl']['FrameRateLimit'] : '';
+                $sources[$i][$inprofile]['bitrate']=isset($enc['RateControl']['BitrateLimit']) ? $enc['RateControl']['BitrateLimit'] : '';
                 if ( isset($profiles[$y]['PTZConfiguration'])) {
                         $sources[$i][$inprofile]['ptz']['name']=$profiles[$y]['PTZConfiguration']['Name'];
                         $sources[$i][$inprofile]['ptz']['nodetoken']=$profiles[$y]['PTZConfiguration']['NodeToken'];
