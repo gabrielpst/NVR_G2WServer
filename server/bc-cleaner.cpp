@@ -796,11 +796,17 @@ int CleanupManager::run_age_based_cleanup() {
     int total_deleted = 0;
 
     try {
+        // Media.start é int(11) — timestamp Unix (segundos), NÃO um DATETIME
+        // (confirmado em misc/sql/schema_mysql.sql). DATE_SUB(NOW(), INTERVAL...)
+        // retorna DATETIME — comparar int contra DATETIME direto é erro de tipo
+        // (bug pego em teste manual antes de ir pra produção). Convertendo o lado
+        // direito também pra timestamp Unix, mesmo idioma já usado em
+        // bc-server.cpp:649 (UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(...)).
         BC_DB_RES dbres = bc_db_get_table(
             "SELECT m.id, m.filepath FROM Media m "
             "JOIN Devices d ON m.device_id = d.id "
             "WHERE d.max_age_days IS NOT NULL AND m.archive=0 AND m.filepath!='' "
-            "AND m.start < DATE_SUB(NOW(), INTERVAL d.max_age_days DAY) "
+            "AND m.start < (UNIX_TIMESTAMP(NOW()) - (d.max_age_days * 86400)) "
             "ORDER BY m.start ASC LIMIT %d", AGE_CLEANUP_BATCH_SIZE);
 
         if (!dbres) {
