@@ -155,9 +155,12 @@
                         <li>
                             <a href="/webhook"><i class="fa fa-cog fa-fw"></i> Webhooks</a>
                         </li>
-                        <li>
-                            <a href="/subdomainprovider"><i class="fa fa-briefcase fa-fw"></i> <?php echo G_SUBDOMAIN_TITLE; ?></a>
-                        </li>
+                        <?php /* Item "SSL / CNAME setup" removido do menu (decisão do Gabriel,
+                           2026-08-07) — a rota /subdomainprovider ainda existe (com aviso
+                           inline), mas depende do backend pago da Bluecherry
+                           (domains.bluecherrydvr.com) e nunca funciona no nosso fork (tabela
+                           Licenses sempre vazia). Ver contexto/2026-08-06-projeto-servidor-
+                           g2w-monitor.md. */ ?>
                         <li class="divider"></li>
                         <li class="divider"></li>
 
