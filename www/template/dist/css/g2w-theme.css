@@ -15,6 +15,10 @@
  */
 
 :root {
+  --g2w-topbar-height: 55px;     /* fonte única de verdade — barra superior e
+                                     topo da sidebar SEMPRE usam esta mesma
+                                     variável, nunca mais dois números que
+                                     podem desencontrar (bug do vão, 2026-08-23) */
   --g2w-bg-dark: #0A1F1A;        /* base da sidebar/topbar — fundo do logo */
   --g2w-bg-dark-elevated: #123328; /* hover/active na sidebar */
   --g2w-accent: #4A9147;          /* verde do "2" — botão/link/destaque */
@@ -91,10 +95,14 @@ input:focus-visible {
 .navbar-default {
   background-color: var(--g2w-bg-dark);
   border-color: var(--g2w-bg-dark);
+  min-height: var(--g2w-topbar-height);
 }
 
+.navbar-default .navbar-header,
 .navbar-default .navbar-brand {
-  padding: 10px 15px;
+  min-height: var(--g2w-topbar-height);
+  display: flex;
+  align-items: center;
 }
 
 .navbar-default .navbar-toggle {
@@ -117,6 +125,30 @@ input:focus-visible {
 
 .navbar-default .sidebar {
   background-color: var(--g2w-bg-dark);
+}
+
+/* O CSS original (sb-admin-2) usa position:absolute na sidebar — a altura
+   dela para onde o próprio conteúdo (menu + card de stats) termina, não
+   onde a página termina. Em telas longas (ex: Monitoring, com vários
+   gráficos) sobra fundo branco embaixo, cortando a barra verde ao meio.
+   Fixed resolve de vez: acompanha a viewport inteira, do topo ao fim, com
+   scroll próprio se o conteúdo da sidebar um dia for maior que a tela —
+   e como bônus a navegação fica sempre visível, mesmo rolando a página.
+
+   ACHADO REAL (2026-08-24, via getBoundingClientRect no console): o
+   sb-admin-2.css original tem `margin-top: 51px` nessa mesma regra — top e
+   margin-top são propriedades DIFERENTES, uma não cancela a outra, elas se
+   SOMAM (51 + 55 = 106px, exatamente o vão que apareceu). Zerar o
+   margin-top explicitamente é obrigatório aqui, não é redundante. */
+@media (min-width: 768px) {
+  .navbar-default .sidebar {
+    position: fixed;
+    top: var(--g2w-topbar-height);
+    margin-top: 0;
+    bottom: 0;
+    left: 0;
+    overflow-y: auto;
+  }
 }
 
 .sidebar ul li {
