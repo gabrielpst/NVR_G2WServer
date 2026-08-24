@@ -48,6 +48,14 @@
 
     <!-- Custom CSS -->
     <link href="/template/dist/css/main.css?v=<?php echo time(); ?>" rel="stylesheet">
+
+    <!-- G2W Theme (reskin 2026-08-11) — carregada por último de propósito, pra
+         vencer sb-admin-2.css/main.css por ordem de origem sem precisar de
+         !important em quase nada. Ver contexto/2026-08-06-projeto-servidor-
+         g2w-monitor.md pro registro dessa mudança. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="/template/dist/css/g2w-theme.css?v=<?php echo time(); ?>" rel="stylesheet">
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
     <!--[if lt IE 9]>

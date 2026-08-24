@@ -1,27 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Monitoring Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 2em; }
-        #charts { display: flex; flex-wrap: wrap; gap: 2em; }
-        .chart-container { width: 400px; }
-        #historical-chart { 
-            position: relative; 
-            height: 400px; 
-            background: #f8f9fa; 
-            border-radius: 8px; 
-            padding: 20px; 
-            margin-top: 10px;
-        }
-        .panel { margin-bottom: 20px; }
-        .huge { font-size: 2.5em; font-weight: bold; }
-        .time-range-btn.active { background-color: #337ab7; color: white; }
-    </style>
-</head>
-<body>
+<?php
+/* Fragmento (não documento completo) — este template é injetado dentro de
+ * main_admin.php via Controller::setView(), que já monta <!DOCTYPE>/<head>/
+ * <body>. Antes tinha um <html>/<head>/<body> aninhado aqui dentro — inválido,
+ * só "funcionava" por tolerância do navegador. Corrigido 2026-08-11. */
+?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+    /* Só o que ainda é layout de verdade — cor/fonte agora vem do
+       g2w-theme.css (carregado no <head> de main_admin.php). */
+    #charts { display: flex; flex-wrap: wrap; gap: 2em; }
+    .chart-container { width: 400px; }
+    #historical-chart {
+        position: relative;
+        height: 400px;
+        background: var(--g2w-bg-page, #f8f9fa);
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 10px;
+    }
+    .panel { margin-bottom: 20px; }
+    .huge { font-size: 2.5em; font-weight: bold; }
+</style>
     <div class="row">
         <div class="col-lg-12">
             <h1 class="page-header">System Monitoring
@@ -35,11 +34,10 @@
     <div class="row">
         <div class="col-lg-12">
             <div class="alert alert-info">
-                <i class="fa fa-info-circle"></i> 
-                <strong>Server Status:</strong> 
-                <span id="server-status">Checking...</span>
+                <strong>Server Status:</strong>
+                <span id="server-status"><span class="status-dot" aria-hidden="true"></span>Checking…</span>
                 <button type="button" class="btn btn-sm btn-default pull-right" onclick="toggleDebug()">
-                    <i class="fa fa-bug"></i> Debug
+                    <i class="fa fa-bug" aria-hidden="true"></i> Debug
                 </button>
             </div>
         </div>
@@ -257,7 +255,7 @@
             console.log('Loading stats for range:', currentRange);
             
             // Show loading state
-            document.getElementById('server-status').innerHTML = '<span class="text-info">Loading...</span>';
+            document.getElementById('server-status').innerHTML = '<span class="status-dot" aria-hidden="true"></span><span class="text-info">Loading…</span>';
             
             // Create XMLHttpRequest
             const xhr = new XMLHttpRequest();
@@ -280,7 +278,7 @@
                     } catch (e) {
                         console.error('Invalid JSON response:', e);
                         console.error('Response text:', xhr.responseText);
-                        document.getElementById('server-status').innerHTML = '<span class="text-danger">Invalid server response</span>';
+                        document.getElementById('server-status').innerHTML = '<span class="status-dot is-down" aria-hidden="true"></span><span class="text-danger">Invalid server response</span>';
                         return;
                     }
 
@@ -311,18 +309,18 @@
                     } catch (e) {
                         console.error('Error updating dashboard:', e);
                         console.error('Response text:', xhr.responseText);
-                        document.getElementById('server-status').innerHTML = '<span class="text-danger">Error updating dashboard</span>';
+                        document.getElementById('server-status').innerHTML = '<span class="status-dot is-down" aria-hidden="true"></span><span class="text-danger">Error updating dashboard</span>';
                     }
                 } else {
                     console.error('HTTP Error:', xhr.status);
                     console.error('Response text:', xhr.responseText);
-                    document.getElementById('server-status').innerHTML = '<span class="text-danger">HTTP Error: ' + xhr.status + '</span>';
+                    document.getElementById('server-status').innerHTML = '<span class="status-dot is-down" aria-hidden="true"></span><span class="text-danger">HTTP Error: ' + xhr.status + '</span>';
                 }
             };
             
             xhr.onerror = function() {
                 console.error('Network error occurred');
-                document.getElementById('server-status').innerHTML = '<span class="text-danger">Network error</span>';
+                document.getElementById('server-status').innerHTML = '<span class="status-dot is-down" aria-hidden="true"></span><span class="text-danger">Network error</span>';
                 
                 // Retry after a short delay if this is the first attempt
                 if (retryCount < maxRetries) {
@@ -333,7 +331,7 @@
             
             xhr.ontimeout = function() {
                 console.error('Request timed out');
-                document.getElementById('server-status').innerHTML = '<span class="text-danger">Request timed out</span>';
+                document.getElementById('server-status').innerHTML = '<span class="status-dot is-down" aria-hidden="true"></span><span class="text-danger">Request timed out</span>';
                 
                 // Retry after a short delay if this is the first attempt
                 if (retryCount < maxRetries) {
@@ -350,18 +348,18 @@
                 document.getElementById('cpu-usage').textContent = '--';
                 document.getElementById('memory-usage').textContent = '--';
                 document.getElementById('disk-usage').textContent = '--';
-                document.getElementById('server-status').innerHTML = '<span class="text-warning">No data available</span>';
+                document.getElementById('server-status').innerHTML = '<span class="status-dot is-down" aria-hidden="true"></span><span class="text-warning">No data available</span>';
                 return;
             }
-            
+
             document.getElementById('cpu-usage').textContent = live.cpu + '%';
             document.getElementById('memory-usage').textContent = live.memory + '%';
             document.getElementById('disk-usage').textContent = live.disk + '%';
-            
+
             if (live.server_running) {
-                document.getElementById('server-status').innerHTML = '<span class="text-success">Server is running</span>';
+                document.getElementById('server-status').innerHTML = '<span class="status-dot" aria-hidden="true"></span><span class="text-success">Server is running</span>';
             } else {
-                document.getElementById('server-status').innerHTML = '<span class="text-danger">Server is not running</span>';
+                document.getElementById('server-status').innerHTML = '<span class="status-dot is-down" aria-hidden="true"></span><span class="text-danger">Server is not running</span>';
             }
         }
         
@@ -832,5 +830,3 @@
         setInterval(loadStatsWithRetry, 30000);
     });
     </script>
-</body>
-</html> 
