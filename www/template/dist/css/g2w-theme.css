@@ -1,0 +1,417 @@
+/*
+ * G2W Theme — reskin visual do painel (2026-08-11)
+ *
+ * Objetivo: modernizar a aparência (sidebar + telas) SEM tocar em nenhuma
+ * classe usada pelo JavaScript (main.js, monitoring.php inline script etc) —
+ * só reestiliza seletores que já existem (Bootstrap 3 / sb-admin-2), carregado
+ * por ÚLTIMO no <head> pra vencer por ordem de origem, sem precisar de
+ * !important em quase nada.
+ *
+ * Paleta extraída de verdade do wordmark oficial (g2w_wordmark.png, sampling
+ * de pixel via PIL) — não é um verde genérico escolhido no olho.
+ *
+ * Testar antes de aplicar em produção: essa folha só entra na instância de
+ * teste do pvedom (ver contexto/2026-08-06-projeto-servidor-g2w-monitor.md).
+ */
+
+:root {
+  --g2w-topbar-height: 55px;     /* fonte única de verdade — barra superior e
+                                     topo da sidebar SEMPRE usam esta mesma
+                                     variável, nunca mais dois números que
+                                     podem desencontrar (bug do vão, 2026-08-23) */
+  --g2w-bg-dark: #0A1F1A;        /* base da sidebar/topbar — fundo do logo */
+  --g2w-bg-dark-elevated: #123328; /* hover/active na sidebar */
+  --g2w-accent: #4A9147;          /* verde do "2" — botão/link/destaque */
+  --g2w-accent-bright: #6CC464;   /* hover do acento, mais vivo */
+  --g2w-accent-soft: rgba(74, 145, 71, 0.14);
+
+  --g2w-surface: #FFFFFF;
+  --g2w-bg-page: #F4F6F4;         /* fundo da área de conteúdo, verde bem sutil */
+  --g2w-border: #E1E7E2;
+
+  --g2w-text: #16231C;
+  --g2w-text-muted: #5B6B62;
+  --g2w-text-on-dark: #F5F7F5;
+  --g2w-text-on-dark-muted: #9FB5A8;
+
+  --g2w-cpu: #3D6B66;   /* teal escuro — distinto do acento, não compete com "ativo" */
+  --g2w-mem: #4A9147;   /* usa o próprio acento */
+  --g2w-disk: #C7862B;  /* âmbar quente */
+
+  --g2w-danger: #C0392B;
+  --g2w-warning: #C7862B;
+  --g2w-success: #4A9147;
+  --g2w-info: #3D6B66;
+
+  --g2w-radius: 10px;
+  --g2w-shadow: 0 1px 2px rgba(10, 31, 26, 0.06), 0 4px 16px rgba(10, 31, 26, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --g2w-bg-page: #0E1512;
+    --g2w-surface: #16211C;
+    --g2w-border: #24352C;
+    --g2w-text: #E8EDE9;
+    --g2w-text-muted: #90A79A;
+  }
+}
+
+/* ===== Tipografia ===== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background-color: var(--g2w-bg-page);
+  color: var(--g2w-text);
+}
+
+.huge,
+#stat-cpu .pull-right,
+#stat-mem .pull-right {
+  font-variant-numeric: tabular-nums;
+}
+
+h1.page-header {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--g2w-text);
+  border-bottom-color: var(--g2w-border);
+}
+
+/* ===== Foco visível (acessibilidade) ===== */
+
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--g2w-accent-bright);
+  outline-offset: 2px;
+}
+
+/* ===== Barra superior + sidebar: um único bloco escuro em "L" ===== */
+
+.navbar-default {
+  background-color: var(--g2w-bg-dark);
+  border-color: var(--g2w-bg-dark);
+  min-height: var(--g2w-topbar-height);
+}
+
+.navbar-default .navbar-header,
+.navbar-default .navbar-brand {
+  min-height: var(--g2w-topbar-height);
+  display: flex;
+  align-items: center;
+}
+
+.navbar-default .navbar-toggle {
+  border-color: var(--g2w-bg-dark-elevated);
+}
+
+.navbar-default .navbar-toggle .icon-bar {
+  background-color: var(--g2w-text-on-dark);
+}
+
+.navbar-top-links > li > a {
+  color: var(--g2w-text-on-dark-muted);
+}
+
+.navbar-top-links > li > a:hover,
+.navbar-top-links > li > a:focus {
+  color: var(--g2w-text-on-dark);
+  background-color: var(--g2w-bg-dark-elevated);
+}
+
+.navbar-default .sidebar {
+  background-color: var(--g2w-bg-dark);
+}
+
+/* O CSS original (sb-admin-2) usa position:absolute na sidebar — a altura
+   dela para onde o próprio conteúdo (menu + card de stats) termina, não
+   onde a página termina. Em telas longas (ex: Monitoring, com vários
+   gráficos) sobra fundo branco embaixo, cortando a barra verde ao meio.
+   Fixed resolve de vez: acompanha a viewport inteira, do topo ao fim, com
+   scroll próprio se o conteúdo da sidebar um dia for maior que a tela —
+   e como bônus a navegação fica sempre visível, mesmo rolando a página.
+
+   ACHADO REAL (2026-08-24, via getBoundingClientRect no console): o
+   sb-admin-2.css original tem `margin-top: 51px` nessa mesma regra — top e
+   margin-top são propriedades DIFERENTES, uma não cancela a outra, elas se
+   SOMAM (51 + 55 = 106px, exatamente o vão que apareceu). Zerar o
+   margin-top explicitamente é obrigatório aqui, não é redundante. */
+@media (min-width: 768px) {
+  .navbar-default .sidebar {
+    position: fixed;
+    top: var(--g2w-topbar-height);
+    margin-top: 0;
+    bottom: 0;
+    left: 0;
+    overflow-y: auto;
+  }
+}
+
+.sidebar ul li {
+  border-bottom: 1px solid rgba(245, 247, 245, 0.06);
+}
+
+.sidebar ul#side-menu > li > a {
+  color: var(--g2w-text-on-dark-muted);
+  padding: 12px 18px;
+  border-left: 3px solid transparent;
+  transition: background-color .15s, color .15s, border-color .15s;
+}
+
+.sidebar ul#side-menu > li > a:hover,
+.sidebar ul#side-menu > li > a:focus {
+  color: var(--g2w-text-on-dark);
+  background-color: var(--g2w-bg-dark-elevated);
+}
+
+.sidebar ul li a.active {
+  background-color: var(--g2w-bg-dark-elevated) !important;
+  color: var(--g2w-text-on-dark);
+  border-left-color: var(--g2w-accent);
+}
+
+.sidebar ul#side-menu > li > a > i.fa {
+  width: 20px;
+  color: var(--g2w-accent-bright);
+  opacity: .85;
+}
+
+.sidebar .divider {
+  background-color: transparent;
+  border-top: 1px solid rgba(245, 247, 245, 0.08);
+  margin: 6px 14px;
+}
+
+/* Widget de status/estatística no rodapé da sidebar */
+.sidebar .panel-body {
+  background-color: transparent;
+}
+
+.sidebar .panel-body .alert {
+  border: none;
+  border-radius: var(--g2w-radius);
+}
+
+#server-stats.panel {
+  background-color: var(--g2w-bg-dark-elevated);
+  border: none;
+  margin: 10px 14px;
+  border-radius: var(--g2w-radius);
+}
+
+#server-stats .panel-heading {
+  background-color: transparent;
+  color: var(--g2w-text-on-dark);
+  border-bottom: 1px solid rgba(245, 247, 245, 0.08);
+}
+
+#server-stats .panel-body {
+  color: var(--g2w-text-on-dark-muted);
+}
+
+#server-stats .progress {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+/* ===== Área de conteúdo ===== */
+
+#page-wrapper {
+  background-color: var(--g2w-bg-page);
+  border-left: none;
+}
+
+/* ===== Cards (panels) — usados em toda tela, inclusive Monitoring ===== */
+
+.panel {
+  border: 1px solid var(--g2w-border);
+  border-radius: var(--g2w-radius);
+  box-shadow: var(--g2w-shadow);
+}
+
+.panel-default > .panel-heading,
+.panel > .panel-heading {
+  background-color: var(--g2w-surface);
+  border-bottom: 1px solid var(--g2w-border);
+  border-radius: var(--g2w-radius) var(--g2w-radius) 0 0;
+  font-weight: 600;
+}
+
+.panel-primary,
+.panel-green,
+.panel-yellow {
+  border: 1px solid var(--g2w-border);
+}
+
+.panel-primary > .panel-heading {
+  background-color: var(--g2w-surface);
+  color: var(--g2w-text);
+  border-bottom: none;
+}
+
+.panel-green > .panel-heading {
+  background-color: var(--g2w-surface);
+  color: var(--g2w-text);
+  border-bottom: none;
+}
+
+.panel-yellow > .panel-heading {
+  background-color: var(--g2w-surface);
+  color: var(--g2w-text);
+  border-bottom: none;
+}
+
+/* Ícone dos 3 cartões de uso (CPU/Mem/Disk): de fa-5x dominante pra um
+   selo/chip discreto — visual mais atual, sem perder a informação. */
+.panel-primary .panel-heading .fa-5x,
+.panel-green .panel-heading .fa-5x,
+.panel-yellow .panel-heading .fa-5x {
+  font-size: 1.5rem;
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  text-align: center;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.panel-primary .panel-heading .fa-5x { background: rgba(61, 107, 102, .12); color: var(--g2w-cpu); }
+.panel-green .panel-heading .fa-5x   { background: var(--g2w-accent-soft); color: var(--g2w-mem); }
+.panel-yellow .panel-heading .fa-5x  { background: rgba(199, 134, 43, .14); color: var(--g2w-disk); }
+
+.panel-primary .huge { color: var(--g2w-cpu); }
+.panel-green .huge   { color: var(--g2w-mem); }
+.panel-yellow .huge  { color: var(--g2w-disk); }
+
+.panel-footer {
+  background-color: var(--g2w-surface);
+  border-top: 1px solid var(--g2w-border);
+  color: var(--g2w-text-muted);
+  font-size: .85rem;
+}
+
+/* ===== Botões / seletor de período (vira "segmented control") ===== */
+
+.btn-group[role="group"] {
+  background: var(--g2w-bg-page);
+  border: 1px solid var(--g2w-border);
+  border-radius: 999px;
+  padding: 3px;
+  display: inline-flex;
+  gap: 2px;
+}
+
+.time-range-btn {
+  border: none !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--g2w-text-muted);
+  font-weight: 500;
+  padding: 6px 16px;
+}
+
+.time-range-btn:hover {
+  color: var(--g2w-text);
+  background: rgba(74, 145, 71, .08) !important;
+}
+
+.time-range-btn.active,
+.time-range-btn.btn-primary {
+  background: var(--g2w-accent) !important;
+  color: #fff !important;
+}
+
+.btn-primary {
+  background-color: var(--g2w-accent);
+  border-color: var(--g2w-accent);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--g2w-accent-bright);
+  border-color: var(--g2w-accent-bright);
+}
+
+/* ===== Alertas (status do servidor etc.) — mais planos, menos "Bootstrap cru" ===== */
+
+.alert {
+  border: none;
+  border-radius: var(--g2w-radius);
+  border-left: 4px solid transparent;
+}
+
+.alert-info {
+  background-color: rgba(61, 107, 102, .10);
+  color: #24433F;
+  border-left-color: var(--g2w-info);
+}
+
+.alert-success {
+  background-color: var(--g2w-accent-soft);
+  color: #2C5A29;
+  border-left-color: var(--g2w-success);
+}
+
+.alert-danger {
+  background-color: rgba(192, 57, 43, .08);
+  color: #7A241A;
+  border-left-color: var(--g2w-danger);
+}
+
+.alert-warning {
+  background-color: rgba(199, 134, 43, .10);
+  color: #7A5013;
+  border-left-color: var(--g2w-warning);
+}
+
+/* ===== Indicador "ao vivo" — elemento de assinatura, só na tela de Monitoring =====
+   Câmera de segurança = "sempre observando". Pulso sutil no ponto verde de
+   status, mesma linguagem de um indicador REC — mas na nossa cor, indicando
+   saudável, não gravando. Único elemento animado da folha, de propósito
+   (uma ousadia só, não espalhada pela tela toda). */
+
+.status-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--g2w-success);
+  margin-right: 7px;
+  position: relative;
+  vertical-align: middle;
+}
+
+.status-dot::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--g2w-success);
+  opacity: .55;
+  animation: g2w-pulse 2.2s ease-out infinite;
+}
+
+.status-dot.is-down {
+  background: var(--g2w-danger);
+}
+
+.status-dot.is-down::after {
+  border-color: var(--g2w-danger);
+  animation: none;
+}
+
+@keyframes g2w-pulse {
+  0%   { transform: scale(.6); opacity: .55; }
+  70%  { transform: scale(1.6); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot::after {
+    animation: none;
+    opacity: 0;
+  }
+}
