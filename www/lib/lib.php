@@ -467,8 +467,16 @@ class user{
 			return false;
 		}
 		// require login when opening admin pages from client
-		if ($_SESSION['from_client'] && !$_SESSION['from_client_manual'])
+		if ($_SESSION['from_client'] && !$_SESSION['from_client_manual']) {
+			// G2W 2026-08-27: /events/ e' API consumida pelo proprio app cliente
+			// (ajax/events/eventsIndex.php usa chAccess('backup') e comenta
+			// "handles API endpoint /events/ used by client app"). Sem esta
+			// excecao, a sessao do app toma redirect no /events/, o app entende
+			// como deslogado e entra em loop infinito de login/logout.
+			if ($type == 'backup' && ($this->info['access_backup'] || $this->info['access_setup']))
+				return true;
 			return false;
+		}
 		if ($type == 'devices' && !$this->info['access_setup'] && $_GET['XML'])
 			return true;
 		if ($type == 'backup' && !$this->info['access_backup'] && !$this->info['access_setup'])
