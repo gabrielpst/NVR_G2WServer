@@ -14,6 +14,36 @@ class mediaRequest extends Controller {
     {
         session_write_close();
 
+        #live snapshot API — quadro recente da câmera (atualizado pelo
+        # snapshot-updater a cada ~2min), independente de gravação. É o que a
+        # grade do app usa como miniatura: sem gravação, a screenshot do último
+        # trecho gravado não existe e a miniatura ficava preta. Serve o JPEG
+        # pré-gerado; se ainda não houver (updater não passou por essa câmera),
+        # faz um grab único de fallback. Ver misc/snapshots/.
+        if (!empty($_GET['mode']) && $_GET['mode']=='livesnapshot'){
+            $id = (!empty($_GET['id'])) ? intval($_GET['id']) : 0;
+            $id or requestError('E: camera ID is required');
+            // permissão por câmera (mesmo esquema do MJPEG/screenshot)
+            $this->user->camPermission($id) or requestError('E: no permission for this camera');
+
+            require_once('/usr/share/bluecherry/snapshots/snapshot-lib.php');
+            $snap = bc_snap_path($id);
+
+            if (!file_exists($snap)) {
+                // fallback: primeira vez / updater atrasado — grab único (lento,
+                // ~3s, só até o updater assumir). Precisa da linha da câmera.
+                $cam = data::getObject('Devices', 'id', $id);
+                if (!empty($cam[0])) {
+                    bc_snap_grab(bc_snap_rtsp_url($cam[0]), $snap);
+                }
+            }
+            file_exists($snap) or requestError('E: snapshot not available yet');
+            header('Content-Type: image/jpeg');
+            header('Cache-Control: no-cache');
+            readfile($snap);
+            exit();
+        }
+
         #screenshot API
         if (!empty($_GET['mode']) && $_GET['mode']=='screenshot'){
 	
