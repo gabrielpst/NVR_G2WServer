@@ -78,8 +78,13 @@ function bc_snap_grab($rtspUrl, $destPath, $timeoutSec = 15)
     $tmp = $destPath . '.tmp';
     // -rtsp_transport tcp: confiável na malha. nobuffer/probesize/analyzeduration
     // baixos: reduz o tempo de análise do ffmpeg. -frames:v 1: um quadro só.
+    // -skip_frame nokey (2026-09-03): decodifica SÓ keyframes — sem isso o
+    // primeiro quadro entregue é um P/B-frame sem referência (câmeras H.264/HEVC
+    // via RTMP/MediaMTX, GOP ~5s) e o JPEG sai cinza com fragmentos (1,6 KB).
+    // Custo: espera até o próximo IDR (≤ 1 GOP, ~4-5 s medidos). Testado nas
+    // duas câmeras do Silvestre4 — ver contexto 2026-09-03 no Nextcloud.
     $cmd = sprintf(
-        'timeout %d %s -nostdin -rtsp_transport tcp -fflags nobuffer -flags low_delay ' .
+        'timeout %d %s -nostdin -rtsp_transport tcp -skip_frame nokey -fflags nobuffer -flags low_delay ' .
         '-probesize 500000 -analyzeduration 1000000 -y -i %s ' .
         '-vf scale=640:-2 -frames:v 1 -q:v 6 -f image2 %s >/dev/null 2>&1',
         intval($timeoutSec), BC_FFMPEG,
