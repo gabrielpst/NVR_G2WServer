@@ -33,7 +33,7 @@ extern "C" {
 
 lavf_device::lavf_device(const char *u, int rtp_protocol)
 	: ctx(0), video_stream_index(-1), audio_stream_index(-1)
-		, rtp_protocol(rtp_protocol)
+		, rtp_protocol(rtp_protocol), last_video_dts(AV_NOPTS_VALUE)
 {
 	strlcpy(url, u, sizeof(url));
 
@@ -355,6 +355,7 @@ int lavf_device::start()
 	}
 
 	update_properties();
+	last_video_dts = AV_NOPTS_VALUE;
 	_started = true;
 
 	return 0;
@@ -427,13 +428,15 @@ void lavf_device::create_stream_packet(AVPacket *src)
 		if (video_stream_index >= 0 && video_stream_index < ctx->nb_streams && 
 		    ctx->streams[video_stream_index] && ctx->streams[video_stream_index]->codecpar) {
 			AVCodecParameters *codecpar = ctx->streams[video_stream_index]->codecpar;
-			static int64_t last_dts = 0;
-			if (codecpar->bit_rate == 0 && dts == last_dts) {
+			/* Per device: as a function-level static this was shared (and
+			 * raced on) by every camera thread, so it compared against
+			 * another camera's timestamp. */
+			if (codecpar->bit_rate == 0 && dts != AV_NOPTS_VALUE && dts == last_video_dts) {
 				// For VBR streams, increment DTS by a small amount
-				dts = last_dts + 1;
-				bc_log(Debug, "VBR stream detected - adjusted DTS from %ld to %ld", last_dts, dts);
+				dts = last_video_dts + 1;
+				bc_log(Debug, "VBR stream detected - adjusted DTS from %ld to %ld", last_video_dts, dts);
 			}
-			last_dts = dts;
+			last_video_dts = dts;
 		}
 	}
 	

@@ -59,6 +59,8 @@ private:
 	int video_stream_index, audio_stream_index;
 	AVPacket frame;
 	stream_packet current_packet;
+	/* DTS of the previous video packet of this device (AV_TIME_BASE) */
+	int64_t last_video_dts;
 
 	void create_stream_packet(AVPacket *src);
 
