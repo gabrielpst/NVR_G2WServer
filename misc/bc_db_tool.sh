@@ -8,7 +8,12 @@
 ### to upgrade existing db run (it will check, that current db version is lower then in installed package)
 # bc_db_tool.sh upgrade_db bc_db_name db_user db_pass [db_host]
 
-set -x # trace
+# Tracing prints every command with its arguments, database passwords
+# included, into the install/container log. Only on request.
+if [[ -n "$BC_DB_TOOL_TRACE" ]]
+then
+    set -x
+fi
 if [[ $(cat /etc/os-release | grep "^ID=" | grep centos) ]]
 then
     IN_RPM="1"

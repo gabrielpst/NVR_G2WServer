@@ -1,0 +1,6 @@
+#!/bin/bash -e
+# Wrapper fino em cima de bc_db_tool.sh upgrade_db — aqui a assinatura já bate
+# 1:1 com o que o entrypoint.sh chama (dbname user password host), só repassa.
+#
+# Uso: bc-database-upgrade dbname user password host
+exec /usr/share/bluecherry/bc_db_tool.sh upgrade_db "$1" "$2" "$3" "$4"

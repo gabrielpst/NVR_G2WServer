@@ -1,0 +1,18 @@
+#!/bin/bash -e
+# Wrapper fino em cima de bc_db_tool.sh new_db, pra bater com a assinatura mais
+# simples (dbname user password host) que o entrypoint.sh chama. O .deb da
+# bluecherry só instala bc_db_tool.sh (chamado assim pelo postinst do pacote,
+# que já sabe passar todos os 7 argumentos) — esse wrapper existe só pra dar
+# uma interface fixa de 4 argumentos pro entrypoint, pegando admin login/senha
+# e userhost do ambiente (mesmas variáveis que o resto do entrypoint.sh usa).
+#
+# Uso: bc-database-create dbname user password host
+dbname="$1"
+user="$2"
+password="$3"
+host="$4"
+userhost="${BLUECHERRY_DB_ACCESS_HOST:-%}"
+
+exec /usr/share/bluecherry/bc_db_tool.sh new_db \
+    "${MYSQL_ADMIN_LOGIN:-root}" "${MYSQL_ADMIN_PASSWORD:-root}" \
+    "$dbname" "$user" "$password" "$host" "$userhost"

@@ -1,0 +1,25 @@
+# Config mínima do MediaMTX pro relay RTMP→RTSP (G2W Monitor, v1).
+#
+# Câmeras/encoders que só falam RTMP (push) mandam pra cá; o bc-server não
+# precisa saber que existe RTMP — ele só vê um RTSP normal servido localmente
+# pelo MediaMTX (mesmo padrão usado no projeto pvedom/Frigate). Zero mudança
+# de código no servidor: qualquer path de push vira automaticamente um path
+# RTSP de mesmo nome, pronto pra cadastrar no painel como Device IP-RTSP
+# comum apontando pra rtsp://mediamtx:8554/<nome-do-path>.
+
+# Porta de ingestão RTMP (onde as câmeras/encoders fazem o push)
+rtmpAddress: :1935
+
+# Porta de saída RTSP (onde o bc-server vai buscar o stream)
+rtspAddress: :8554
+
+# v1: sem autenticação no push RTMP (rede interna do compose/LXC, não exposta
+# pra fora). Se algum dia precisar expor a porta 1935 pra internet, definir
+# aqui usuário/senha por path antes disso.
+authMethod: internal
+
+# Não precisa de path fixo — qualquer nome de path usado no push vira
+# automaticamente disponível pra leitura via RTSP (comportamento padrão do
+# MediaMTX, "paths: {}" com fallback pra all_others).
+paths:
+  all_others:
