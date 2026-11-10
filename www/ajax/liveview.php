@@ -18,6 +18,15 @@ class liveview extends Controller {
 
     public function getData()
     {
+        // G2W 2026-11: a tela de ao vivo agora é /aovivo. Esta (MooTools +
+        // hls.js) não toca vídeo — o MooTools troca Function.prototype.bind e
+        // quebra o tocador — e só continua acessível por /liveview?classico=1
+        // até ser aposentada.
+        if (Inp::get('classico') != '1') {
+            header('Location: /aovivo');
+            exit;
+        }
+
         $this->setView('main_viewer', false);
 
 		$tmp = data::query("SELECT access_device_list FROM Users WHERE id='{$_SESSION['id']}'");

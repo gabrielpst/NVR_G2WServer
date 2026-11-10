@@ -30,7 +30,7 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
                 <img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high">
             </a>
             <div class="topo-acoes">
-                <a class="link-topo" href="/liveview">Ao vivo</a>
+                <a class="link-topo" href="/aovivo">Ao vivo</a>
                 <a class="link-topo" href="/monitor" title="Painel completo, com todas as configurações">Modo avançado</a>
                 <span class="quem" title="Usuário conectado"><?php echo $h($usuario); ?></span>
                 <a class="link-topo" href="/logout">Sair</a>
