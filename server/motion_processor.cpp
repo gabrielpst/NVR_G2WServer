@@ -67,7 +67,12 @@ motion_processor::~motion_processor()
 
 void motion_processor::destroy()
 {
-	destroy_flag = true;
+	/* Under the lock run() waits with, or the wakeup can be lost and the
+	 * thread never ends */
+	{
+		std::lock_guard<std::mutex> l(lock);
+		destroy_flag = true;
+	}
 	buffer_wait.notify_all();
 }
 

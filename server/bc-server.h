@@ -165,6 +165,7 @@ public:
 	void run();
 
 	bool update_motion_thresholds();
+	void stop_workers();
 
 	void getStatusXml(pugi::xml_node &xmlnode);
 	void notify_device_state(const char *state);
