@@ -188,7 +188,10 @@ void bc_status_component_error(const char *error, ...)
 
 	if (component_error_tmp) {
 		int l = strlen(component_error_tmp);
-		component_error_tmp = (char*) realloc(component_error_tmp, l + 1024);
+		/* +1 for the separator: without it the 1024 bytes written below
+		 * end one past the block, and the fortified vsnprintf aborts the
+		 * server on the second error of a cycle (e.g. database down). */
+		component_error_tmp = (char*) realloc(component_error_tmp, l + 1 + 1024);
 		component_error_tmp[l++] = '\n';
 		vsnprintf(component_error_tmp + l, 1024, error, args);
 	} else {

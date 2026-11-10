@@ -85,7 +85,11 @@ void recorder::run()
 		if (!saved_properties)
 			saved_properties = packet.properties();
 
-		if (packet.properties() != saved_properties && *packet.properties() != *saved_properties) {
+		/* A new properties object means a new camera session (reconnection),
+		 * even when its contents are equal: timestamps start over, and
+		 * continuing the same file made the writer re-stamp every later
+		 * packet at a guessed frame rate until the file rolled over. */
+		if (packet.properties() != saved_properties) {
 			bc_log(Debug, "recorder: stream properties changed");
 			saved_properties = packet.properties();
 			recording_end();
@@ -135,6 +139,7 @@ void recorder::run()
 				if (ret < 0) {
 					bc_log(Error, "Failed while feeding snapshot saver with more frames");
 					stop_snapshot();
+					snapshot_failed();
 				} else if (ret > 0) {
 					bc_log(Debug, "Still need to feed more frames to finish snapshot");
 				} else {
@@ -168,6 +173,7 @@ void recorder::run()
 				if (ret < 0) {
 					bc_log(Error, "Failed to make snapshot");
 					stop_snapshot();
+					snapshot_failed();
 				} else if (ret > 0) {
 					bc_log(Debug, "Need to feed more frames to finish snapshot");
 				} else {
@@ -266,6 +272,7 @@ int recorder::recording_start(time_t start_ts, const stream_packet &first_packet
 
 	snapshots_limit = 1;  /* TODO Optionize */
 	snapshots_done = 0;
+	snapshot_failures = 0;
 	snapshotting_delay_since_motion_start_ms = snapshot_delay_ms;
 	event_notification_executed = false;
 
@@ -330,6 +337,15 @@ void recorder::recording_end()
 	}
 
 	stop_snapshot();
+}
+
+/* A stream the snapshot decoder cannot handle fails on every keyframe; after
+ * a few attempts this recording goes without its thumbnail instead of
+ * logging three error lines every couple of seconds. */
+void recorder::snapshot_failed()
+{
+	if (++snapshot_failures >= 3)
+		snapshots_done = snapshots_limit;
 }
 
 void recorder::stop_snapshot()

@@ -158,7 +158,7 @@ function create_db
 function new_db
 {
     # new_db db_admin_name db_admin_pass bc_db_name db_user db_pass db_host db_userhost
-    echo new_db "$@"
+    echo new_db # arguments not echoed: they include the passwords
     MYSQL_ADMIN_LOGIN="$1"
     MYSQL_ADMIN_PASSWORD="$2"
     dbname=$3
@@ -205,7 +205,7 @@ function fix_motion_maps
 function upgrade_db
 {
     # upgrade_db bc_db_name db_user db_pass [host]
-    echo upgrade_db "$@"
+    echo upgrade_db # arguments not echoed: they include the password
     dbname="$1"
     user="$2"
     password="$3"

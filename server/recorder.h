@@ -39,6 +39,9 @@ private:
 	unsigned long lost_packets = 0;
 	time_t lost_seconds = 0;
 	time_t lost_reported = 0;
+
+	int snapshot_failures = 0;
+	void snapshot_failed();
 	std::string snapshot_filename;
 
 	int snapshots_limit;  /* TODO Optionize */
