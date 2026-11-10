@@ -25,8 +25,20 @@ class gestao extends Controller
 
     public function start($uri = Array())
     {
-        $this->autorizar($uri);
-        return parent::start($uri);
+        try {
+            $this->autorizar($uri);
+            return parent::start($uri);
+        } catch (Throwable $e) {
+            // falha inesperada (em geral o banco): registra o detalhe no log do
+            // servidor e responde algo que a tela sabe mostrar
+            error_log('G2W gestao: '.get_class($e).': '.$e->getMessage().' @ '.basename($e->getFile()).':'.$e->getLine());
+            if ($this->pedidoApi) $this->falha(500, 'O servidor não conseguiu concluir o pedido. Tente de novo em instantes.');
+            http_response_code(500);
+            header('Content-Type: text/html; charset=utf-8');
+            return '<!DOCTYPE html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>G2W Monitor</title>'
+                .'<body style="font:16px system-ui,sans-serif;margin:40px auto;max-width:520px;padding:0 16px"><h1>O painel não conseguiu carregar</h1>'
+                .'<p>Pode ser uma falha momentânea do banco de dados. <a href="">Tente de novo</a> ou abra o <a href="/monitor">modo avançado</a>.</p></body></html>';
+        }
     }
 
     private function autorizar($uri)
@@ -58,7 +70,7 @@ class gestao extends Controller
     public function getData()
     {
         $cams = G2WGestao::cameras();
-        $bytes_dia = array_sum(array_column($cams, 'bytes_24h'));
+        $bytes_dia = G2WGestao::bytesPorDia($cams);
         $discos = G2WGestao::discos($bytes_dia);
         $certs = G2WGestao::certificados();
         $motor = G2WGestao::motor();
@@ -118,7 +130,7 @@ class gestao extends Controller
         $cams = G2WGestao::cameras();
         return $this->pagina('cameras', 'Câmeras', array(
             'cams' => $cams,
-            'discos' => G2WGestao::discos(array_sum(array_column($cams, 'bytes_24h'))),
+            'discos' => G2WGestao::discos(G2WGestao::bytesPorDia($cams)),
         ));
     }
 
@@ -194,7 +206,7 @@ class gestao extends Controller
     public function getMiniatura()
     {
         $id = intval(filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT));
-        $arq = '/var/lib/bluecherry/snapshots/'.$id.'.jpg';
+        $arq = G2WGestao::arquivoMiniatura($id);
         if ($id <= 0 || !is_file($arq)) {
             http_response_code(404);
             die();
@@ -275,7 +287,7 @@ class gestao extends Controller
     {
         $e = $this->entrada();
         $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
-        $atual = G2WGestao::q("SELECT id, protocol, device, schedule FROM Devices WHERE id=?", 'i', array($id));
+        $atual = G2WGestao::q("SELECT id, protocol, device, substream_path FROM Devices WHERE id=?", 'i', array($id));
         if (!$atual) $this->falha(404, 'Câmera não encontrada.');
 
         $nome = $this->texto($e, 'nome', 1, 100, 'O nome da câmera');
@@ -312,6 +324,12 @@ class gestao extends Controller
             $sets[] = 'device=?';
             $tipos .= 's';
             $vals[] = $f['device'];
+            // o segundo stream mora no mesmo aparelho ("host|porta|caminho"):
+            // acompanha o host e a porta novos, mantém o caminho dele
+            $sub = explode('|', (string)$atual[0]['substream_path'], 3);
+            $sets[] = 'substream_path=?';
+            $tipos .= 's';
+            $vals[] = $f['host'].'|'.$f['porta'].'|'.(isset($sub[2]) ? $sub[2] : '');
             if ($f['usuario'] !== null) {
                 $sets[] = 'rtsp_username=?';
                 $sets[] = 'rtsp_password=?';
@@ -346,7 +364,7 @@ class gestao extends Controller
         $usuario = isset($p['user']) ? rawurldecode($p['user']) : null;
         $senha = isset($p['pass']) ? rawurldecode($p['pass']) : '';
         if ($usuario !== null && (strlen($usuario) > 256 || strlen($senha) > 256)) $this->falha(422, 'Usuário ou senha da câmera longos demais.');
-        return array('device' => $device, 'usuario' => $usuario, 'senha' => $senha);
+        return array('device' => $device, 'host' => $p['host'], 'porta' => $porta, 'usuario' => $usuario, 'senha' => $senha);
     }
 
     public function postArmazenamento()
@@ -384,17 +402,14 @@ class gestao extends Controller
         if ($novo || $senha !== '') {
             if (($v = G2WGestao::validarSenha($senha)) !== true) $this->falha(422, $v);
         }
-        try {
-            $bloqueio = G2WGestao::bloqueioDePermitidas(isset($e['cameras']) && is_array($e['cameras']) ? $e['cameras'] : array());
-        } catch (InvalidArgumentException $ex) {
-            $this->falha(422, $ex->getMessage());
-        }
+        $bloqueio = $this->bloqueioDoPedido($e);
 
         if (G2WGestao::q("SELECT id FROM Users WHERE username=? AND id<>?", 'si', array($login, $id))) {
             $this->falha(422, 'Já existe um usuário com o login "'.$login.'".');
         }
 
         if ($novo) {
+            if ($bloqueio === null) $bloqueio = '';
             $salt = data::getRandomString(4);
             G2WGestao::q("INSERT INTO Users (username, password, salt, name, email, phone, notes, access_setup, access_remote,
                 access_web, access_backup, access_relay, access_device_list, access_ptz_list, change_password)
@@ -411,8 +426,11 @@ class gestao extends Controller
         }
 
         G2WGestao::q("UPDATE Users SET username=?, name=?, email=?, phone=?, notes=?, access_setup=?, access_remote=?, access_web=?,
-            access_backup=?, access_device_list=?, change_password=? WHERE id=?", 'sssssiiiisii',
-            array($login, $nome, $email, $tel, $obs, $admin, $app, $site, $grav, $bloqueio, $trocar, $id));
+            access_backup=?, change_password=? WHERE id=?", 'sssssiiiiii',
+            array($login, $nome, $email, $tel, $obs, $admin, $app, $site, $grav, $trocar, $id));
+        if ($bloqueio !== null) {
+            G2WGestao::q("UPDATE Users SET access_device_list=? WHERE id=?", 'si', array($bloqueio, $id));
+        }
         if ($senha !== '') {
             $salt = data::getRandomString(4);
             G2WGestao::q("UPDATE Users SET password=?, salt=? WHERE id=?", 'ssi', array(G2WGestao::hashSenha($senha, $salt), $salt, $id));
@@ -439,11 +457,8 @@ class gestao extends Controller
         $app = !empty($e['app']) ? 1 : 0;
         $grav = !empty($e['gravacoes']) ? 1 : 0;
         if (!$site && !$app) $this->falha(422, 'Marque pelo menos um jeito de entrar: aplicativo ou site.');
-        try {
-            $bloqueio = G2WGestao::bloqueioDePermitidas(isset($e['cameras']) && is_array($e['cameras']) ? $e['cameras'] : array());
-        } catch (InvalidArgumentException $ex) {
-            $this->falha(422, $ex->getMessage());
-        }
+        $bloqueio = $this->bloqueioDoPedido($e);
+        if ($bloqueio === null) $bloqueio = '';
 
         $logins = array();
         for ($n = $de; $n <= $ate; $n++) $logins[$n] = $prefixo.$n;
@@ -514,11 +529,20 @@ class gestao extends Controller
             case 'ativar':
             case 'desativar':
                 if (!$comuns) $this->falha(422, 'Nenhum usuário comum selecionado.'.$nota);
-                $v = ($acao === 'ativar') ? 1 : 0;
-                G2WGestao::q("UPDATE Users SET access_web=?, access_remote=? WHERE id IN (".implode(',', array_fill(0, count($comuns), '?')).")",
-                    'ii'.str_repeat('i', count($comuns)), array_merge(array($v, $v), $comuns));
-                if (!$v) G2WGestao::derrubarSessoes($comuns);
-                $this->json(array('ok' => true, 'msg' => count($comuns).' usuário(s) '.($v ? 'ativado(s): voltam a entrar pelo aplicativo e pelo site.' : 'desativado(s): não entram mais.').$nota));
+                $marcasC = implode(',', array_fill(0, count($comuns), '?'));
+                $tiposC = str_repeat('i', count($comuns));
+                if ($acao === 'ativar') {
+                    // só mexe em quem está de fato desativado: quem já entra só
+                    // pelo aplicativo (ou só pelo site) continua como estava
+                    $n = G2WGestao::q("UPDATE Users SET access_web=1, access_remote=1
+                        WHERE id IN ($marcasC) AND access_web=0 AND access_remote=0", $tiposC, $comuns);
+                    $this->json(array('ok' => true, 'msg' => ($n > 0
+                        ? $n.' usuário(s) ativado(s): voltam a entrar pelo aplicativo e pelo site.'
+                        : 'Nenhum dos selecionados estava desativado.').$nota));
+                }
+                G2WGestao::q("UPDATE Users SET access_web=0, access_remote=0 WHERE id IN ($marcasC)", $tiposC, $comuns);
+                G2WGestao::derrubarSessoes($comuns);
+                $this->json(array('ok' => true, 'msg' => count($comuns).' usuário(s) desativado(s): não entram mais.'.$nota));
 
             case 'redefinir_senha':
                 if (!$comuns) $this->falha(422, 'Nenhum usuário comum selecionado.'.$nota);
@@ -543,11 +567,8 @@ class gestao extends Controller
 
             case 'definir_cameras':
                 if (!$comuns) $this->falha(422, 'Nenhum usuário comum selecionado.'.$nota);
-                try {
-                    $bloqueio = G2WGestao::bloqueioDePermitidas(isset($e['cameras']) && is_array($e['cameras']) ? $e['cameras'] : array());
-                } catch (InvalidArgumentException $ex) {
-                    $this->falha(422, $ex->getMessage());
-                }
+                $bloqueio = $this->bloqueioDoPedido($e);
+                if ($bloqueio === null) $this->falha(422, 'Informe as câmeras.');
                 G2WGestao::q("UPDATE Users SET access_device_list=? WHERE id IN (".implode(',', array_fill(0, count($comuns), '?')).")",
                     's'.str_repeat('i', count($comuns)), array_merge(array($bloqueio), $comuns));
                 $this->json(array('ok' => true, 'msg' => 'Câmeras atualizadas para '.count($comuns).' usuário(s).'.$nota));
@@ -556,6 +577,19 @@ class gestao extends Controller
     }
 
     // --------------------------------------------------------- utilitários
+
+    /* Lista "pode ver" do pedido -> lista de bloqueio. null quando o pedido
+     * não trouxe a chave 'cameras' (quem chama decide: manter ou liberar). */
+    private function bloqueioDoPedido($e)
+    {
+        if (!array_key_exists('cameras', $e)) return null;
+        if (!is_array($e['cameras'])) $this->falha(422, 'Lista de câmeras inválida.');
+        try {
+            return G2WGestao::bloqueioDePermitidas($e['cameras']);
+        } catch (InvalidArgumentException $ex) {
+            $this->falha(422, $ex->getMessage());
+        }
+    }
 
     private function entrada()
     {

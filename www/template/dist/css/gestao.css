@@ -133,6 +133,10 @@ main { width: 100%; max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; 
 .situacao-ok .situacao-icone { background: var(--verde); }
 .situacao-erro .situacao-icone { background: var(--erro); }
 .avisos { margin-top: 10px; display: grid; gap: 8px; }
+.faixa-velha {
+  background: var(--alerta-suave); border: 1px solid #E5C77A; border-radius: var(--raio);
+  padding: 12px 14px; margin-bottom: 12px; font-weight: 600;
+}
 .aviso {
   display: flex; gap: 12px; align-items: center; background: var(--cartao);
   border: 1px solid var(--borda); border-left: 5px solid; border-radius: var(--raio); padding: 12px 14px;

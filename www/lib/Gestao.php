@@ -86,6 +86,8 @@ class G2WGestao
     {
         if (self::$tabelasOk !== null) return self::$tabelasOk;
         try {
+            // caminho normal: as duas já existem e nenhum CREATE é executado
+            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 2) return self::$tabelasOk = true;
             self::q("CREATE TABLE IF NOT EXISTS G2WPainelAcessos (
                 user_id INT NOT NULL PRIMARY KEY,
                 ultimo_acesso INT NOT NULL,
@@ -109,6 +111,16 @@ class G2WGestao
      * pode derrubar o login: qualquer falha é engolida. */
     public static function registrarLogin($userId, $peloApp)
     {
+        // Quem acabou de provar a senha não pode continuar marcado para ser
+        // derrubado: a marca (ActiveUsers.kick) é renovada a cada tentativa e,
+        // sem isto, redefinir a senha ou reativar alguém deixava a pessoa sem
+        // conseguir entrar enquanto insistisse.
+        try {
+            $ip = isset($_SERVER['REMOTE_ADDR']) ? (string)$_SERVER['REMOTE_ADDR'] : '';
+            self::q("UPDATE ActiveUsers SET kick=0 WHERE id=? AND ip=? AND kick=1", 'is', array(intval($userId), $ip));
+        } catch (Throwable $e) {
+            error_log('G2W gestao: limpar kick: '.$e->getMessage());
+        }
         try {
             if (!self::garantirTabelas()) return;
             self::q("INSERT INTO G2WPainelAcessos (user_id, ultimo_acesso, pelo_app, total) VALUES (?, ?, ?, 1)
@@ -163,8 +175,9 @@ class G2WGestao
 
         $agg = array();
         foreach (self::q("SELECT device_id, MIN(IF(archive=0, start, NULL)) AS antiga, MAX(end) AS ultimo_fim,
-                SUM(IF(archive=0, size, 0)) AS bytes, SUM(IF(start>?, size, 0)) AS bytes_24h
-                FROM Media GROUP BY device_id", 'i', array($agora - 86400)) as $a) {
+                SUM(IF(archive=0, size, 0)) AS bytes, SUM(IF(start>?, size, 0)) AS bytes_24h,
+                MIN(IF(start>?, start, NULL)) AS ini_24h
+                FROM Media GROUP BY device_id", 'ii', array($agora - 86400, $agora - 86400)) as $a) {
             $agg[intval($a['device_id'])] = $a;
         }
         $ultimo = array();
@@ -193,8 +206,7 @@ class G2WGestao
             }
             $min_sem_gravar = $ultima ? intval(floor(($agora - $ultima) / 60)) : null;
 
-            $snap = '/var/lib/bluecherry/snapshots/'.$id.'.jpg';
-            $snap_ts = @filemtime($snap);
+            $snap_ts = @filemtime(self::arquivoMiniatura($id));
             $imagem_ok = $snap_ts && ($agora - $snap_ts) < self::MIN_SEM_IMAGEM * 60;
 
             $antiga = (isset($agg[$id]) && $agg[$id]['antiga']) ? intval($agg[$id]['antiga']) : null;
@@ -210,6 +222,9 @@ class G2WGestao
                     : array('erro', 'Fora do ar', $quanto.' e sem imagem. Verifique a câmera, a energia e a rede.');
             } elseif (!$imagem_ok) {
                 $estado = array('alerta', 'Sem imagem', 'A câmera não está entregando imagem.');
+            } elseif ($deve_gravar && $min_sem_gravar >= 3) {
+                $estado = array('alerta', 'Sem gravar há '.self::duracao($min_sem_gravar * 60),
+                    'Nada novo foi gravado nos últimos minutos. Se continuar, vira alerta de câmera parada.');
             } elseif ($deve_gravar) {
                 $estado = array('ok', 'Gravando', 'Última gravação há '.self::duracao($min_sem_gravar * 60).'.');
             } elseif ($letra === 'N') {
@@ -239,10 +254,28 @@ class G2WGestao
                 'dias_guardados' => $antiga ? max(0, intval(floor(($agora - $antiga) / 86400))) : 0,
                 'bytes' => isset($agg[$id]) ? floatval($agg[$id]['bytes']) : 0.0,
                 'bytes_24h' => isset($agg[$id]) ? floatval($agg[$id]['bytes_24h']) : 0.0,
+                'ini_24h' => (isset($agg[$id]) && $agg[$id]['ini_24h']) ? intval($agg[$id]['ini_24h']) : null,
                 'estado' => array('nivel' => $estado[0], 'rotulo' => $estado[1], 'detalhe' => $estado[2]),
             );
         }
         return $cams;
+    }
+
+    /* Quanto o servidor grava por dia, pelas últimas 24 h. Com menos de 24 h
+     * de gravação a soma é extrapolada pelo tempo que de fato foi coberto; com
+     * menos de 1 h não há base e devolve 0 (sem previsão). */
+    public static function bytesPorDia(array $cams)
+    {
+        $soma = array_sum(array_column($cams, 'bytes_24h'));
+        $inicios = array_filter(array_column($cams, 'ini_24h'));
+        if (!$inicios || $soma <= 0) return 0.0;
+        $janela = min(86400, time() - min($inicios));
+        return ($janela < 3600) ? 0.0 : $soma * 86400 / $janela;
+    }
+
+    public static function arquivoMiniatura($cameraId)
+    {
+        return '/var/lib/bluecherry/snapshots/'.intval($cameraId).'.jpg';
     }
 
     // -------------------------------------------------------------- disco
@@ -337,8 +370,7 @@ class G2WGestao
             $cmd = ($pid > 0) ? @file_get_contents('/proc/'.$pid.'/cmdline') : false;
             if ($cmd !== false && strpos($cmd, 'bc-server') !== false) {
                 $m['rodando'] = true;
-                $ini = @filectime('/proc/'.$pid);
-                $m['iniciado_em'] = $ini ?: null;
+                $m['iniciado_em'] = self::inicioDoProcesso($pid);
             }
         }
         // Histórico de reinícios: o motor não registra isso no banco, então o
@@ -357,6 +389,22 @@ class G2WGestao
             }
         }
         return $m;
+    }
+
+    /* Hora em que o processo começou: campo 22 de /proc/<pid>/stat (ticks desde
+     * o boot) somado ao btime de /proc/stat. A data do diretório /proc/<pid>
+     * não serve: muda quando o kernel recria o inode, sem o processo reiniciar. */
+    private static function inicioDoProcesso($pid)
+    {
+        $stat = @file_get_contents('/proc/'.intval($pid).'/stat');
+        $geral = @file_get_contents('/proc/stat');
+        if ($stat === false || $geral === false || !preg_match('/^btime\s+(\d+)/m', $geral, $b)) return null;
+        // o nome do processo (2º campo) pode ter espaços e parênteses: conta a partir do último ")"
+        $campos = explode(' ', trim(substr($stat, strrpos($stat, ')') + 1)));
+        if (!isset($campos[19]) || !ctype_digit($campos[19])) return null;
+        $hz = intval(@shell_exec('getconf CLK_TCK 2>/dev/null')) ?: 100;
+        $ini = intval($b[1]) + intdiv(intval($campos[19]), $hz);
+        return ($ini > 0 && $ini <= time() + 5) ? $ini : null;
     }
 
     // ----------------------------------------------------------- usuários

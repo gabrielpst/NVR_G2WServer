@@ -100,20 +100,32 @@
     function iniciarVisao() {
         var raiz = $('#visao-geral');
         var seg = parseInt(raiz.getAttribute('data-atualizar'), 10) || 60;
+        // Se a atualização falhar (rede, sessão expirada), a tela não pode
+        // continuar parecendo atual: avisa de quando é a leitura mostrada.
+        function desatualizada(sim) {
+            var faixa = $('#visao-velha');
+            if (!sim) { if (faixa) faixa.remove(); return; }
+            if (faixa) return;
+            faixa = el('p', { id: 'visao-velha', class: 'faixa-velha', role: 'alert' }, [
+                'Não foi possível atualizar. O que aparece abaixo é a leitura das ' + $('#hora-pagina').textContent + '. ',
+                el('a', { href: '/gestao', text: 'Recarregar' })
+            ]);
+            $('#conteudo').insertBefore(faixa, $('#conteudo').firstChild);
+        }
         setInterval(function () {
             if (document.hidden) return;
             fetch('/gestao', { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
                 .then(function (r) { return r.ok && !r.redirected ? r.text() : null; })
                 .then(function (html) {
-                    if (!html) return;
-                    var doc = new DOMParser().parseFromString(html, 'text/html');
-                    var novo = doc.getElementById('visao-geral');
+                    var doc = html ? new DOMParser().parseFromString(html, 'text/html') : null;
+                    var novo = doc ? doc.getElementById('visao-geral') : null;
+                    if (!novo) { desatualizada(true); return; }
                     var hora = doc.getElementById('hora-pagina');
-                    if (!novo) return;
                     $('#visao-geral').replaceWith(novo);
                     if (hora) $('#hora-pagina').replaceWith(hora);
+                    desatualizada(false);
                 })
-                .catch(function () { /* fica com a última leitura */ });
+                .catch(function () { desatualizada(true); });
         }, seg * 1000);
     }
 
