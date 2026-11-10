@@ -163,7 +163,7 @@ $disco = $discos ? $discos[0] : null;
         <?php } else { ?>
             <ul class="lista-simples">
                 <?php foreach ($motor['historico'] as $i => $t) { ?>
-                    <li><strong><?php echo date('d/m/Y H:i', $t); ?></strong>
+                    <li><strong><?php echo date('d/m/Y H:i:s', $t); ?></strong>
                         <span><?php echo ($i === 0 && $motor['rodando'] && $motor['iniciado_em'] == $t) ? 'início atual — no ar desde então' : 'reinício anterior'; ?></span></li>
                 <?php } ?>
             </ul>

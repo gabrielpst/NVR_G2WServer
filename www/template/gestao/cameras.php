@@ -1,6 +1,6 @@
 <?php defined('INDVR') or exit();
 $h = array('G2WGestao', 'h');
-$rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'personalizada' => 'agenda personalizada');
+$rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'personalizada' => 'por agenda');
 ?>
 <h1 class="titulo-pagina">Câmeras</h1>
 <p class="intro">Mude o nome, por quantos dias guardar e se a câmera grava. Para adicionar ou remover câmeras e ajustes finos de imagem, use o <a href="/monitor">modo avançado</a>.</p>
@@ -28,16 +28,16 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
                     <span>dias</span>
                 </div>
                 <small id="<?php echo $f; ?>-ret-ajuda">Em branco: guarda até o disco encher. Hoje há <?php
-                    echo $c['mais_antiga'] ? $c['dias_guardados'].' dia(s), '.G2WGestao::tamanho($c['bytes']) : 'nada gravado'; ?>.</small>
+                    echo $c['mais_antiga'] ? ($c['dias_guardados'] < 1 ? 'menos de 1 dia' : $c['dias_guardados'].' dia'.($c['dias_guardados'] > 1 ? 's' : '')).', '.G2WGestao::tamanho($c['bytes']) : 'nada gravado'; ?>.</small>
             </div>
             <div class="campo">
                 <label for="<?php echo $f; ?>-grav">Gravação</label>
                 <select id="<?php echo $f; ?>-grav" name="gravacao">
-                    <option value="padrao"<?php echo $c['gravacao'] === 'padrao' ? ' selected' : ''; ?>>Padrão do servidor (<?php echo $rotulo_padrao[$c['padrao_servidor']]; ?>)</option>
+                    <option value="padrao"<?php echo $c['gravacao'] === 'padrao' ? ' selected' : ''; ?>>Padrão (<?php echo $rotulo_padrao[$c['padrao_servidor']]; ?>)</option>
                     <option value="sempre"<?php echo $c['gravacao'] === 'sempre' ? ' selected' : ''; ?>>Gravar o tempo todo</option>
                     <option value="nunca"<?php echo $c['gravacao'] === 'nunca' ? ' selected' : ''; ?>>Não gravar (só ao vivo)</option>
                     <?php if ($c['gravacao'] === 'personalizada') { ?>
-                        <option value="manter" selected>Agenda personalizada (definida no modo avançado)</option>
+                        <option value="manter" selected>Agenda própria (modo avançado)</option>
                     <?php } ?>
                 </select>
             </div>
