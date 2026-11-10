@@ -36,6 +36,7 @@
 }
 .av-quadro[data-estado="semsinal"] { border-color: #C0392B; }
 .av-quadro[data-estado="foto"] { border-color: #C7862B; }
+.av-quadro[data-estado="negado"] { border-color: #5B6B62; }
 .av-quadro video, .av-foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #0d1512; }
 .av-quadro video { z-index: 1; }
 /* enquanto não há vídeo andando, fica a foto mais recente por baixo */

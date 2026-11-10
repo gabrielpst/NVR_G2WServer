@@ -110,10 +110,17 @@
                 return r.json();
             })
             .then(function (j) {
+                var liberadas = {};
                 (j.cameras || []).forEach(function (c) {
+                    liberadas[c.id] = true;
                     if (porId[c.id]) { porId[c.id].foto_ts = c.foto_ts; porId[c.id].foto_hora = c.foto_hora; }
                 });
-                quadros.forEach(function (q) { q.atualizarFoto(); });
+                quadros.forEach(function (q) {
+                    // câmera desligada ou bloqueada para este usuário depois que a tela abriu:
+                    // o quadro para de tentar e diz o motivo, em vez de ficar em "Sem sinal"
+                    if (q.cam && !liberadas[q.cam.id]) q.negar();
+                    else q.atualizarFoto();
+                });
                 return j;
             });
     }
@@ -219,7 +226,7 @@
         }
 
         function semSinal() {
-            if (!vivo || encerrado || estado === 'foto') return;
+            if (!vivo || encerrado || estado === 'foto' || estado === 'negado') return;
             desligarTocador();
             if (!semSinalDesde) semSinalDesde = new Date();
             porFoto();
@@ -300,9 +307,11 @@
                 if (!dados.fatal) return;
                 var codigo = dados.response && dados.response.code;
                 if (codigo === 401 || codigo === 403) {
-                    // chave vencida ou trocada: pede outra e recomeça
+                    // chave vencida ou trocada: pede outra e recomeça. Se a recusa for
+                    // por permissão, a conferência de estado marca o quadro como "Sem acesso".
                     token = null;
                     semSinal();
+                    conferirEstado().catch(function () { /* fica em "Sem sinal" e tenta de novo */ });
                     return;
                 }
                 if (dados.type === H.ErrorTypes.MEDIA_ERROR && errosMidia < 2) {
@@ -325,6 +334,12 @@
                 if (cam) marcar('parado', texto || 'Pausado');
             },
             destruir: function () { vivo = false; desligarTocador(); },
+            negar: function () {
+                if (estado === 'negado') return;
+                desligarTocador();
+                if (foto) foto.hidden = true;
+                marcar('negado', 'Sem acesso', 'Esta câmera não está mais liberada para o seu usuário. Escolha outra para este quadro.');
+            },
             calar: function () {
                 if (!video) return;
                 video.muted = true;
@@ -332,12 +347,12 @@
                 botaoSom.textContent = 'Som';
             },
             atualizarFoto: function () {
-                if (!cam || !foto) return;
+                if (!cam || !foto || estado === 'negado') return;
                 if (estado !== 'aovivo') porFoto();
                 if (estado === 'foto') rotulo.textContent = 'Só foto' + (cam.foto_hora ? ' · ' + cam.foto_hora : '');
             },
             vigiar: function () {
-                if (!cam || !vivo || encerrado) return;
+                if (!cam || !vivo || encerrado || estado === 'negado') return;
                 var agora = Date.now();
                 if (estado === 'aovivo' && video.paused) {
                     // o navegador pausa vídeo mudo fora da área visível (celular): não é queda
