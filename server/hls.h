@@ -309,6 +309,11 @@ public:
     bool append_segment(hls_segment *segment);
     bool finish_segment(int64_t pts);
     bool clear_window();
+    /* Discard the partially received segment (its muxer is gone), keeping the
+     * published window and the segment numbering. */
+    void reset_input();
+    /* Number of segments produced so far; never decreases. */
+    uint32_t segment_counter() { return _cc; }
 
     size_t get_window_size() { return _config.window_size; };
     void get_config(size_t *segment_size, double *segment_duration);

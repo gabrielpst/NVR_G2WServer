@@ -1495,10 +1495,26 @@ bool hls_content::clear_window()
     }
 
     _in_buffer.clear();
+    _append_criteria = false;
     _pts = 0;
-    _cc = 0;
+    /* _cc is NOT reset: segment ids (and so EXT-X-MEDIA-SEQUENCE and the
+     * segment URLs) must keep increasing across reconnections, or players and
+     * caches mistake new segments for the old ones with the same number. */
 
     return unlock_mutex();
+}
+
+void hls_content::reset_input()
+{
+    if (!lock_mutex()) {
+        return;
+    }
+
+    _in_buffer.clear();
+    _append_criteria = false;
+    _pts = 0;
+
+    unlock_mutex();
 }
 
 bool hls_content::append_segment(hls_segment *segment)

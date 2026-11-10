@@ -62,6 +62,18 @@ static void do_error_event(struct bc_record *bc_rec, bc_event_level_t level,
 
 void stop_handle_properly(struct bc_record *bc_rec)
 {
+	/* The substream thread writes to the live muxers: stop it before they
+	 * are freed. */
+	if (bc_rec->liveview_substream)
+	{
+		bc_rec->liveview_substream->stop();
+		bc_rec->liveview_substream_thread->join();
+		delete bc_rec->liveview_substream;
+		delete bc_rec->liveview_substream_thread;
+		bc_rec->liveview_substream = 0;
+		bc_rec->liveview_substream_thread = 0;
+	}
+
 	if (!bc_rec->bc->substream_mode)
 		bc_streaming_destroy_rtp(bc_rec);
 
@@ -71,16 +83,6 @@ void stop_handle_properly(struct bc_record *bc_rec)
 	{
 		hls_content *content = bc_rec->hls_stream->get_hls_content(bc_rec->id);
 		if (content != NULL) content->clear_window();
-	}
-
-	if (bc_rec->liveview_substream)
-	{
-		bc_rec->liveview_substream->stop();
-		bc_rec->liveview_substream_thread->join();
-		delete bc_rec->liveview_substream;
-		delete bc_rec->liveview_substream_thread;
-		bc_rec->liveview_substream = 0;
-		bc_rec->liveview_substream_thread = 0;
 	}
 
 
@@ -601,10 +603,8 @@ void bc_record::run()
 							log.log(Error, "Unable to reinitialize reencoded live HLS stream");
 					}
 
-					if (bc_streaming_is_active_hls(this)) {
-						if (bc_streaming_hls_packet_write(this, packet) == -1)
-							log.log(Error, "Failed to stream reencoded HLS live view");
-					}
+					if (bc_streaming_is_active_hls(this))
+						bc_streaming_hls_packet_write(this, packet);
 
 					if (bc_streaming_is_active(this))
 						if (bc_streaming_packet_write(this, packet) == -1)
@@ -667,6 +667,15 @@ bc_record::bc_record(int i)
 	hls_stream_ctx[0] = 0;
 	hls_stream_ctx[1] = 0;
 	hls_stream = 0;
+
+	memset(&live, 0, sizeof(live));
+	live.hls_ref_ts = AV_NOPTS_VALUE;
+	live.hls_last_dts[0] = live.hls_last_dts[1] = AV_NOPTS_VALUE;
+	live.rtp_last_dts[0] = live.rtp_last_dts[1] = AV_NOPTS_VALUE;
+	cur_pts = 0;
+	cur_pkt_flags = 0;
+	cur_stream_index = 0;
+	pkt_first_chunk = false;
 
 	osd_time = 0;
 	start_failed = 0;

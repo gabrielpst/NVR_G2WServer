@@ -92,6 +92,32 @@ public:
 	hls_listener	 	*hls_stream;
 	hls_segment::type 	hls_segment_type;
 
+	/* Live streaming health. The live view (HLS/RTP) is a by-product of the
+	 * camera connection: its failures are repaired here, in isolation, and
+	 * never stop the input or the recorders. Touched only by the thread that
+	 * writes live packets (device thread, or substream thread). */
+	struct live_state {
+		bool     hls_wanted;          /* HLS was set up for this input; recreate if lost */
+		bool     hls_wait_keyframe;   /* drop packets until the next video keyframe */
+		time_t   hls_retry_at;        /* monotonic; earliest muxer recreation */
+		int64_t  hls_ts_offset;       /* added to source timestamps (AV_TIME_BASE) */
+		int64_t  hls_ref_ts;          /* newest output DTS, both streams (AV_TIME_BASE) */
+		time_t   hls_rebase_time;     /* monotonic; last timeline rebase */
+		int64_t  hls_last_dts[2];     /* last DTS written per stream, muxer time base */
+		uint32_t hls_segments_seen;   /* hls_content segment counter at last check */
+		time_t   hls_segment_time;    /* monotonic; last time a segment was produced */
+		unsigned hls_keyframes_fed;   /* video keyframes offered since that segment */
+		unsigned hls_stall_limit;     /* seconds without segment before recreating */
+
+		bool     rtp_wanted;
+		time_t   rtp_retry_at;
+		int64_t  rtp_last_dts[2];
+
+		/* Counters for the once-a-minute summary line */
+		time_t   report_time;
+		unsigned ts_adjusted, pkts_dropped, ts_rebased, write_rejected;
+	} live;
+
 	time_t			osd_time;
 	unsigned int		start_failed;
 
