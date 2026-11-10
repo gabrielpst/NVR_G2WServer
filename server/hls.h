@@ -403,6 +403,7 @@ private:
         std::string blocked;        /* Users.access_device_list */
         time_t      checked = 0;    /* last database check */
         time_t      refreshed = 0;  /* last time its date was renewed */
+        time_t      db_failed = 0;  /* last failed attempt to check it */
     };
     std::unordered_map<std::string, token_info> _tokens;
     pthread_mutex_t  _token_mutex = PTHREAD_MUTEX_INITIALIZER;

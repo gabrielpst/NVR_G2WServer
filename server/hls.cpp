@@ -1993,7 +1993,13 @@ bool hls_listener::check_token(const std::string &token, int device_id)
     }
     pthread_mutex_unlock(&_token_mutex);
 
-    if (!cached || now - info.checked >= HLS_TOKEN_CACHE_SEC)
+    /* After a failed database attempt, do not try again on every request:
+     * each attempt can hold this thread for as long as the database lock
+     * timeout, and this thread serves every viewer. */
+    bool db_backoff = cached && now - info.db_failed < HLS_TOKEN_CACHE_SEC &&
+                      now - info.checked < HLS_TOKEN_STALE_SEC;
+
+    if (!db_backoff && (!cached || now - info.checked >= HLS_TOKEN_CACHE_SEC))
     {
         char *escaped = bc_db_escape_string(token.c_str(), token.length());
         BC_DB_RES dbres = NULL;
@@ -2007,6 +2013,11 @@ bool hls_listener::check_token(const std::string &token, int device_id)
              * working for a while, an unknown one is refused. */
             free(escaped);
             if (!cached || now - info.checked >= HLS_TOKEN_STALE_SEC) return false;
+
+            info.db_failed = now;
+            pthread_mutex_lock(&_token_mutex);
+            _tokens[token] = info;
+            pthread_mutex_unlock(&_token_mutex);
         }
         else
         {
