@@ -26,6 +26,8 @@
 
 #include <string>
 #include <vector>
+#include <cmath>
+#include <exception>
 
 #include "libbluecherry.h"
 #include "decoder.h"
@@ -744,15 +746,20 @@ bool hls_session::create_response()
         size_t window_max = content->get_window_size();
 
         uint32_t sequence = window_size ? content->_window[0]->_meta.id : 0;
-        double duration = window_size ? content->_window[0]->_meta.duration : 0.;
+        /* RFC 8216 4.3.3.1: no segment may be longer than the target duration */
+        double duration = 0.;
+        for (size_t i = 0; i < window_size; i++)
+            if (content->_window[i]->_meta.duration > duration)
+                duration = content->_window[i]->_meta.duration;
         const char* segment_extension = content->_fmp4 ? "m4s" : "ts";
 
         std::string body;
         std_string_append(body, "#EXTM3U\n");
-        std_string_append(body, "#EXT-X-VERSION: 3\n");
-        std_string_append(body, "#EXT-X-ALLOW-CACHE: NO\n");
-        std_string_append(body, "#EXT-X-TARGETDURATION: %.f\n", duration + 1);
-        std_string_append(body, "#EXT-X-MEDIA-SEQUENCE: %u\n", sequence);
+        /* RFC 8216 4.2: no whitespace between the tag's colon and its value */
+        std_string_append(body, "#EXT-X-VERSION:3\n");
+        std_string_append(body, "#EXT-X-ALLOW-CACHE:NO\n");
+        std_string_append(body, "#EXT-X-TARGETDURATION:%.f\n", ceil(duration) + 1);
+        std_string_append(body, "#EXT-X-MEDIA-SEQUENCE:%u\n", sequence);
 
         if (content->_fmp4 && content->have_initial_segment())
         {
@@ -853,9 +860,9 @@ bool hls_session::create_response()
 
         std::string body;
         std_string_append(body, "#EXTM3U\n");
-        std_string_append(body, "#EXT-X-VERSION: 3\n");
-        std_string_append(body, "#EXT-X-TARGETDURATION: %.f\n", duration + 1);
-        std_string_append(body, "#EXT-X-MEDIA-SEQUENCE: %u\n", 0);
+        std_string_append(body, "#EXT-X-VERSION:3\n");
+        std_string_append(body, "#EXT-X-TARGETDURATION:%.f\n", ceil(duration) + 1);
+        std_string_append(body, "#EXT-X-MEDIA-SEQUENCE:%u\n", 0);
         std_string_append(body, "#EXT-X-PLAYLIST-TYPE:VOD\n");
 
         std_string_append(body, "#EXTINF:%f,\n", duration);
