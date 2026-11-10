@@ -89,7 +89,8 @@ int lavf_device::start()
 	const AVInputFormat *input_fmt = NULL;
 	int re = -1;  // Move re declaration to outer scope
 
-	bc_log(Debug, "Opening session from URL: %s", url);
+	/* The URL carries the camera credentials; keep it out of the log */
+	bc_log(Debug, "Opening session");
 
 	if (!strncmp(url, "rtsp://", 7))
 	{
@@ -131,7 +132,7 @@ int lavf_device::start()
 					  (ip[0] == 192 && ip[1] == 168);
 			bc_log(Debug, "IP address %s is %s", host, is_local ? "local" : "remote");
 		} else {
-			bc_log(Debug, "Host %s is not an IP address, assuming remote");
+			bc_log(Debug, "Host %s is not an IP address, assuming remote", host);
 		}
 		
 		// Check if this is a Reolink camera by looking for common Reolink paths
@@ -177,7 +178,9 @@ int lavf_device::start()
 			if (re != 0) {
 				char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
 				av_strerror(re, errbuf, sizeof(errbuf));
-				bc_log(Info, "%s connection failed (%s)", transports[i], errbuf);
+				/* Debug: an offline camera gets here on every retry. The
+				 * caller logs the state change once, from error_message. */
+				bc_log(Debug, "%s connection failed (%s)", transports[i], errbuf);
 				
 				// Clean up failed context
 				if (ctx) {
@@ -190,7 +193,8 @@ int lavf_device::start()
 		if (re != 0) {
 			char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
 			av_strerror(re, errbuf, sizeof(errbuf));
-			bc_log(Error, "Failed to open RTSP stream %s. Error: %d (%s)", url, re, errbuf);
+			snprintf(error_message, sizeof(error_message),
+				"Failed to open RTSP stream (%s)", errbuf);
 			if (ctx) {
 				avformat_close_input(&ctx);
 				ctx = NULL;
@@ -200,7 +204,7 @@ int lavf_device::start()
 
 		// Verify the context is valid
 		if (!ctx || !ctx->iformat) {
-			bc_log(Error, "Invalid format context after opening stream");
+			strcpy(error_message, "Invalid format context after opening stream");
 			if (ctx) {
 				avformat_close_input(&ctx);
 				ctx = NULL;
@@ -234,7 +238,7 @@ int lavf_device::start()
 		if (re < 0) {
 			stop();
 			av_strerror(re, error_message, sizeof(error_message));
-			bc_log(Error, "Failed to analyze input stream. Error: %d (%s)", re, error_message);
+			bc_log(Debug, "Failed to analyze input stream. Error: %d (%s)", re, error_message);
 			return -1;
 		}
 	}

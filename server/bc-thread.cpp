@@ -43,6 +43,15 @@
 
 #define DEF_TH_LOG_LEVEL Warning
 
+/* Reconnection backoff for a camera that is offline or keeps dropping. The
+ * ceiling is deliberately low: every second waited after the camera comes
+ * back is a second not recorded. Log volume does not depend on it, since the
+ * log gets one line per state change, not per attempt. */
+#define RECONNECT_DELAY_MIN   10
+#define RECONNECT_DELAY_MAX   60
+/* A connection that lasted this long was healthy: next retry is quick again */
+#define RECONNECT_STABLE_SEC  60
+
 /* For Ubuntu Lucid */
 #ifndef V4L2_CID_MPEG_VIDEO_H264_MIN_QP
 #define V4L2_CID_MPEG_VIDEO_H264_MIN_QP (V4L2_CID_MPEG_BASE+353)
@@ -185,12 +194,42 @@ void msleep(int duration) {
 
 }
 
+static const char *input_error_message(struct bc_handle *bc)
+{
+	/* lavf_device keeps its own message buffer, hiding the base class one */
+	const char *err = (bc->type == BC_DEVICE_LAVF)
+		? reinterpret_cast<lavf_device*>(bc->input)->get_error_message()
+		: bc->input->get_error_message();
+
+	return (err && *err) ? err : "Unknown error";
+}
+
+/* Wait before reconnecting; returns early when the thread is told to stop or
+ * the device configuration changed (e.g. the camera address was fixed). */
+static void reconnect_wait(struct bc_record *bc_rec, unsigned seconds)
+{
+	for (unsigned i = 0; i < seconds; i++) {
+		pthread_mutex_lock(&bc_rec->cfg_mutex);
+		bool wake = bc_rec->thread_should_die || bc_rec->cfg_dirty;
+		pthread_mutex_unlock(&bc_rec->cfg_mutex);
+
+		if (wake)
+			return;
+		sleep(1);
+	}
+}
+
 void bc_record::run()
 {
 	stream_packet packet;
 	int ret;
 	unsigned iteration = 0;
 	char thread_name[16];
+	/* Reconnection state: see RECONNECT_DELAY_* */
+	unsigned retry_delay = RECONNECT_DELAY_MIN;
+	unsigned failed_attempts = 0;
+	time_t connected_since = 0, offline_since = 0;
+	std::string last_start_error;
 
 	snprintf(thread_name, sizeof(thread_name), "dev%d", id);
 	pthread_setname_np(pthread_self(), thread_name);
@@ -231,19 +270,36 @@ void bc_record::run()
 
 		if (!bc->input->is_started()) {
 			if (bc->input->start() < 0) {
+				const char *err = input_error_message(bc);
+
+				/* One line when the camera goes offline and one if the
+				 * reason changes; the retries themselves are silent. */
 				if ((start_failed & BC_MAINSTREAM_START_FAILED) == 0) {
-					log.log(Error, "Error starting device stream: %s", bc->input->get_error_message());
+					log.log(Error, "Error starting device stream: %s. Retrying every %d to %d s; "
+						"next log line when this changes", err,
+						RECONNECT_DELAY_MIN, RECONNECT_DELAY_MAX);
 					/* Notification hook to PHP: device is offline */
 					notify_device_state("OFFLINE");
+					if (!offline_since)
+						offline_since = bc_gettime_monotonic();
+				} else if (last_start_error != err) {
+					log.log(Error, "Device stream still not starting, now with: %s", err);
 				}
+				last_start_error = err;
+				failed_attempts++;
 				start_failed |= BC_MAINSTREAM_START_FAILED;
 				do_error_event(this, BC_EVENT_L_ALRM, BC_EVENT_CAM_T_NOT_FOUND);
-				log.log(Info, "Going to retry connection after a delay");
 				goto error;
 			} else if (start_failed & BC_MAINSTREAM_START_FAILED) {
 				start_failed &= ~BC_MAINSTREAM_START_FAILED;
-				log.log(Error, "Stream started after failures");
+				log.log(Error, "Stream started after %u failed attempts (%ld s offline)",
+					failed_attempts, (long)(bc_gettime_monotonic() - offline_since));
 			}
+
+			failed_attempts = 0;
+			offline_since = 0;
+			last_start_error.clear();
+			connected_since = bc_gettime_monotonic();
 
 			if (bc->type == BC_DEVICE_LAVF) {
 				const char *info = reinterpret_cast<lavf_device*>(bc->input)->stream_info();
@@ -570,7 +626,8 @@ void bc_record::run()
 			stop_handle_properly(this);
 			/* XXX this should be something other than NOT_FOUND */
 			do_error_event(this, BC_EVENT_L_ALRM, BC_EVENT_CAM_T_NOT_FOUND);
-			log.log(Info, "Going to retry connection after a delay");
+			if (!offline_since)
+				offline_since = bc_gettime_monotonic();
 			goto error;
 		}
 
@@ -617,25 +674,31 @@ void bc_record::run()
 		}
 
 		if (!bc->substream_mode) {
-			/* Send packet to HLS streaming clients */
-			if (bc_streaming_is_active_hls(this) &&
-				bc_streaming_hls_packet_write(this, packet) == -1) {
-				log.log(Error, "Failed to stream packet for HLS live view, going to reconnect after a delay");
-				goto error;
-			}
+			/* Live view (HLS and RTSP clients). A failure here is handled
+			 * inside the streaming code, which rebuilds the live muxer on
+			 * its own: it must never cost the camera connection, because
+			 * that would interrupt the recording as well. */
+			if (bc_streaming_is_active_hls(this))
+				bc_streaming_hls_packet_write(this, packet);
 
-			/* Send packet to streaming clients */
-			if (bc_streaming_is_active(this) &&
-				bc_streaming_packet_write(this, packet) == -1) {
-				log.log(Error, "Failed to stream packet for live view, going to reconnect after a delay");
-				goto error;
-			}
+			bc_streaming_packet_write(this, packet);
 		}
 
 		msleep(10);
 		continue;
 error:
-		sleep(10);
+		/* A connection that held for a while gets a quick first retry;
+		 * one that never comes up, or drops right away, backs off. */
+		if (connected_since &&
+		    bc_gettime_monotonic() - connected_since >= RECONNECT_STABLE_SEC)
+			retry_delay = RECONNECT_DELAY_MIN;
+		connected_since = 0;
+
+		reconnect_wait(this, retry_delay);
+
+		retry_delay *= 2;
+		if (retry_delay > RECONNECT_DELAY_MAX)
+			retry_delay = RECONNECT_DELAY_MAX;
 	}
 	log.log(Info, "Shutting down device thread");
 
