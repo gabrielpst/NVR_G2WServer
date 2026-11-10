@@ -400,8 +400,10 @@ bool CleanupManager::delete_media_file(const std::string& filepath, int id) {
         base_path = base_path.substr(0, last_dot);
     }
     
-    // Delete the main file
-    bool main_file_deleted = (unlink(filepath.c_str()) == 0);
+    // Delete the main file. Already gone counts as deleted: otherwise the row
+    // stays active forever, is selected again on every run and, once enough
+    // of them pile up at the head of the queue, retention stops for good.
+    bool main_file_deleted = (unlink(filepath.c_str()) == 0 || errno == ENOENT);
     
     // Delete sidecar files (jpg, jpeg, etc)
     std::vector<std::string> sidecar_extensions = {".jpg", ".jpeg", ".png", ".txt"};
@@ -692,6 +694,15 @@ int CleanupManager::run_cleanup() {
             }
         }
         bc_db_free_table(storage_res);
+
+        // Without a threshold (query failed, database busy) the loop below
+        // would never reach its target and delete recordings for the whole
+        // time budget. Skip this run; the next one tries again.
+        if (target_threshold <= 0.0) {
+            bc_log(Error, "Storage threshold not available from the database, skipping this cleanup run");
+            cleanup_in_progress = false;
+            return -1;
+        }
         
         bc_log(Info, "Target storage threshold: %.1f%%", target_threshold);
         
@@ -805,7 +816,7 @@ int CleanupManager::run_age_based_cleanup() {
         BC_DB_RES dbres = bc_db_get_table(
             "SELECT m.id, m.filepath FROM Media m "
             "JOIN Devices d ON m.device_id = d.id "
-            "WHERE d.max_age_days IS NOT NULL AND m.archive=0 AND m.filepath!='' "
+            "WHERE d.max_age_days IS NOT NULL AND d.max_age_days > 0 AND m.archive=0 AND m.filepath!='' "
             "AND m.start < (UNIX_TIMESTAMP(NOW()) - (d.max_age_days * 86400)) "
             "ORDER BY m.start ASC LIMIT %d", AGE_CLEANUP_BATCH_SIZE);
 
