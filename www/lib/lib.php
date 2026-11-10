@@ -23,6 +23,7 @@ require_once('View.php');
 require_once('Controller.php');
 require_once ('Ponvif.php');
 require_once('bc_license_wrapper.php');
+require_once('Gestao.php');
 
 if (empty($nload)){
 	include("lang.php");
@@ -339,6 +340,37 @@ class database{
 		$this->check_connection();
 		return mysqli_insert_id($this->dblink);
 	}
+	/* G2W 2026-11: consulta parametrizada (prepared statement) — usada pelo
+	 * painel de gestão (ajax/gestao.php). Diferente de query()/fetchAll(), os
+	 * valores NUNCA entram no texto do SQL e o erro vira exceção (não um
+	 * E_USER_ERROR fatal), pra quem chama poder responder JSON limpo.
+	 * $types no formato do mysqli ("isd..."); SELECT devolve as linhas,
+	 * o resto devolve o número de linhas afetadas. */
+	public function prepared($query, $types = '', $params = array()) {
+		$this->check_connection();
+		$stmt = mysqli_prepare($this->dblink, $query);
+		if (!$stmt)
+			throw new RuntimeException('prepare: '.mysqli_error($this->dblink));
+		if ($types !== '') {
+			$refs = array();
+			foreach ($params as $k => $v) $refs[$k] = &$params[$k];
+			mysqli_stmt_bind_param($stmt, $types, ...$refs);
+		}
+		if (!mysqli_stmt_execute($stmt)) {
+			$err = mysqli_stmt_error($stmt);
+			mysqli_stmt_close($stmt);
+			throw new RuntimeException('execute: '.$err);
+		}
+		$result = mysqli_stmt_get_result($stmt);
+		if ($result === false) {
+			$ret = mysqli_stmt_affected_rows($stmt);
+		} else {
+			$ret = mysqli_fetch_all($result, MYSQLI_ASSOC);
+			mysqli_free_result($result);
+		}
+		mysqli_stmt_close($stmt);
+		return $ret;
+	}
 }
 
 class data{
@@ -353,8 +385,9 @@ class data{
 	public static function getRandomString($length = 4) {
         $string = '';
 		$s = '0123456789abcdefghijklmnopqrstuvwxyz';
+		// G2W 2026-11: random_int (CSPRNG) no lugar de mt_rand — é o salt da senha.
 		for ($p = 0; $p < $length; $p++)
-			$string .= $s[mt_rand(0, strlen($s) - 1)];
+			$string .= $s[random_int(0, strlen($s) - 1)];
 		return $string;
 	}
 	public static function formQueryFromArray($type, $table, $array, $parameter = false, $value = false){
@@ -527,6 +560,7 @@ class user{
 				if (!empty($_SESSION['from_client'])) { $_SESSION['from_client_override'] = true; }
 				$_SESSION['from_client'] = $from_client; 
 				if ($_SESSION['from_client']) { $_SESSION['from_client_manual'] = true; } #if user manually logging in from client
+				G2WGestao::registrarLogin($this->info['id'], (bool)$from_client);
 				if (isset($this->info['change_password']) && $this->info['change_password']) return 'OK CHANGE_PASSWORD';
 				return 'OK'; } 
 		else { return LOGIN_WRONG; };
@@ -545,6 +579,13 @@ class user{
 		$data['access_remote'] = (Inp::post('access_remote') == 'on') ? 1 : 0;
 		$data['access_backup'] = (Inp::post('access_backup') == 'on') ? 1 : 0;
 		$data['access_setup'] = (Inp::post('access_setup') == 'on') ? 1 : 0;
+		// G2W 2026-09-03: checkbox desmarcado não é enviado pelo navegador;
+		// sem normalizar aqui a coluna ficava 1 pra sempre (bug do upstream).
+		$data['change_password'] = (Inp::post('change_password') == 'on') ? 1 : 0;
+		// Ao editar, campo de senha vazio = manter a senha (antes só o
+		// placeholder __default__ mantinha; vazio era recusado e o autofill do
+		// navegador sobrescrevia a senha sem ninguém perceber).
+		if (!$new && (!isset($data['password']) || $data['password'] === '')) $data['password'] = '__default__';
 		$response = self::checkUserData($data, $new);
 		if ($response === true){
 			$tmp = '';

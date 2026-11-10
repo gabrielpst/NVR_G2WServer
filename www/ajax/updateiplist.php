@@ -5,6 +5,10 @@ class updateiplist extends Controller {
 	
     public function __construct(){
         parent::__construct();
+        // G2W 2026-11: esta rota não conferia login nenhum — qualquer um na
+        // rede fazia o servidor baixar a lista de câmeras da Bluecherry (HTTP
+        // sem TLS) e gravar no banco.
+        $this->chAccess('admin');
     }
 
     public function getData()

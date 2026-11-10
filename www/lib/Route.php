@@ -48,7 +48,11 @@ class Route
             // "monitoring" só existe como nome do template/menu, não da rota;
             // erro pego em teste real: usar "/monitoring" aqui dava "Route
             // error!" porque www/ajax/monitoring.php não existe).
-            $uri['path'] = '/monitor';
+            // G2W 2026-11: a entrada agora é o painel de gestão (/gestao,
+            // telas simples em português). O painel completo segue em
+            // /monitor ("modo avançado"). Quem não é admin é redirecionado
+            // pelo próprio controller, como antes.
+            $uri['path'] = '/gestao';
         } else {
             if (preg_match('/ajax\/(.*)\.php/', $url, $matches)) {
                 $old_ajax_url = true;

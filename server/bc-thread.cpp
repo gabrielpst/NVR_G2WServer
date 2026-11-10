@@ -48,7 +48,7 @@
  * back is a second not recorded. Log volume does not depend on it, since the
  * log gets one line per state change, not per attempt. */
 #define RECONNECT_DELAY_MIN   10
-#define RECONNECT_DELAY_MAX   60
+#define RECONNECT_DELAY_MAX   30
 /* A connection that lasted this long was healthy: next retry is quick again */
 #define RECONNECT_STABLE_SEC  60
 

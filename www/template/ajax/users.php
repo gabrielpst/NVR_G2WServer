@@ -121,7 +121,7 @@
                         <label class="col-lg-4 col-md-4 control-label"><?php echo USERS_PASSWORD; ?><p class='help-block'><small><?php echo USERS_PASSWORD_EX; ?></small></p></label>
 
                         <div class="col-lg-6 col-md-6">
-                            <input class="form-control" type='password' name='password' value="<?php echo ((!empty($dvr_users->data['new'])) ? '' : '__default__'); ?>"  />
+                            <input class="form-control" type='password' name='password' autocomplete="new-password" value="<?php echo ((!empty($dvr_users->data['new'])) ? '' : '__default__'); ?>"  />
                         </div>
                     </div>
 

@@ -76,7 +76,7 @@
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
                 </button>
-                <a class="navbar-brand" href="/">
+                <a class="navbar-brand" href="/monitor">
                     <img style="max-width: 80px; margin-top: -10px;" src="/img/logo.png">
                 </a>
             </div>
@@ -100,7 +100,7 @@
                         </li>
                         <?php if ($current_user->info['access_setup']) { ?>
                         <li>
-                            <a href="/"><i class="fa fa-dashboard fa-fw"></i> Admin panel</a>
+                            <a href="/monitor"><i class="fa fa-dashboard fa-fw"></i> Admin panel</a>
                         </li>
                         <?php } ?>
                         <li>
@@ -118,6 +118,9 @@
                 <div class="sidebar-nav navbar-collapse" id="navbar-collapse">
                     <ul class="nav" id="side-menu">
 
+                        <li>
+                            <a href="/gestao"><i class="fa fa-home fa-fw"></i> Painel simplificado</a>
+                        </li>
 
                         <li>
                             <a href="javascript:void(0);" class='liveView'><i class="fa fa-image fa-fw"></i> <?php echo MMENU_LIVEVIEW; ?></a>

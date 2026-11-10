@@ -56,6 +56,10 @@ class mediaRequest extends Controller {
 	
         	$event = $event[0];
 		!empty($event['filepath']) or requestError('E: No media is associated with this event.');
+		// G2W 2026-11: a permissão por câmera não era conferida aqui (quem
+		// tinha uma câmera bloqueada via a imagem trocando o id).
+		$shot_dev = data::query("SELECT device_id FROM Media WHERE id=".intval($event['id']));
+		(!empty($shot_dev) && $this->user->camPermission($shot_dev[0]['device_id'])) or requestError('E: no permission for this camera');
 	
 //        	$path_to_image = str_replace('mkv', 'jpg', $event['filepath']);
 		$path_to_image = str_replace('mp4', 'jpg', $event['filepath']);
@@ -81,6 +85,10 @@ class mediaRequest extends Controller {
         	requestError('Could not retrieve media for '.$id);
 
         $item = $events[0];
+
+        // G2W 2026-11: conferir a permissão por câmera antes de entregar o
+        // arquivo (antes bastava estar logado e trocar o id).
+        $this->user->camPermission($item['device_id']) or requestError('E: no permission for this camera');
 
 
         dl_file_resumable($item['filepath']);

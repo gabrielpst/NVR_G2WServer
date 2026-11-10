@@ -26,10 +26,14 @@ No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada
 
 - Servidor HLS não trava mais depois de o container ser congelado (snapshot de backup do Proxmox).
 - Ao vivo isolado da gravação: falha do muxer ao vivo recria só o muxer daquela câmera; timestamps corrigidos em vez de descartados; áudio no HLS só AAC/MP3; playlist conforme a RFC 8216.
-- Câmera fora do ar: reconexão com recuo (10 a 60 s) e uma linha de log por mudança de estado.
+- Câmera fora do ar: reconexão com recuo (10 a 30 s) e uma linha de log por mudança de estado.
 - Parar o gravador de uma câmera (agenda, troca de endereço, parada do servidor) não aborta mais o processo; banco fora do ar também não.
 - Rota `/hls`: token escapado, só gravações registradas são servidas, nginx aceita só playlist e segmento.
 - Container: rotação do `bluecherry.log`, senhas fora do `docker logs`, SIGTERM repassado ao bc-server.
+
+### Painel de gestão (branch `painel-gestao-2026-11`, junto na mesma imagem)
+
+Telas novas em português em `/gestao` (visão geral com a saúde das câmeras, câmeras, usuários com criação e ações em lote, gravações com linha do tempo). O painel original continua disponível como modo avançado em `/monitor`.
 
 Painel web: `https://<host>:7001` (login inicial `Admin` / `bluecherry` — trocar a senha assim que entrar).
 
