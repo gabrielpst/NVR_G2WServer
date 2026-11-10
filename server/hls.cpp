@@ -64,6 +64,7 @@ extern "C" {
 #define HLS_TOKEN_CACHE_SEC         15                      // Token re-checked against the database this often
 #define HLS_TOKEN_STALE_SEC         120                     // With the database unreachable, a known token lasts this long
 #define HLS_TOKEN_REFRESH_SEC       60                      // A token in use has its date renewed this often
+#define HLS_TOKEN_DB_BACKOFF_SEC    60                      // After a failed check, a known token is not re-checked for this long
 #define HLS_TOKEN_CACHE_MAX         2000                    // Cached tokens before the cache is dropped
 
 static void std_string_append(std::string &source, const char *data, ...)
@@ -1996,7 +1997,7 @@ bool hls_listener::check_token(const std::string &token, int device_id)
     /* After a failed database attempt, do not try again on every request:
      * each attempt can hold this thread for as long as the database lock
      * timeout, and this thread serves every viewer. */
-    bool db_backoff = cached && now - info.db_failed < HLS_TOKEN_CACHE_SEC &&
+    bool db_backoff = cached && now - info.db_failed < HLS_TOKEN_DB_BACKOFF_SEC &&
                       now - info.checked < HLS_TOKEN_STALE_SEC;
 
     if (!db_backoff && (!cached || now - info.checked >= HLS_TOKEN_CACHE_SEC))
