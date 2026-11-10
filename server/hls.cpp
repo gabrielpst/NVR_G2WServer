@@ -61,6 +61,10 @@ extern "C" {
 #define HLS_SEGMENT_DURATION        3.0                     // Most accepted HLS segment duration
 #define HLS_HEADER_EXPIRE_SEC       2                       // HLS header expiration seconds
 #define HLS_SERVER_CHUNK_MAX        65535                   // RX chunk size to send per one call
+#define HLS_TOKEN_CACHE_SEC         15                      // Token re-checked against the database this often
+#define HLS_TOKEN_STALE_SEC         120                     // With the database unreachable, a known token lasts this long
+#define HLS_TOKEN_REFRESH_SEC       60                      // A token in use has its date renewed this often
+#define HLS_TOKEN_CACHE_MAX         2000                    // Cached tokens before the cache is dropped
 
 static void std_string_append(std::string &source, const char *data, ...)
 {
@@ -803,7 +807,8 @@ bool hls_session::create_response()
         if (content->_fmp4 && content->have_initial_segment())
         {
             std_string_append(body, "#EXT-X-INDEPENDENT-SEGMENTS\n");
-            std_string_append(body, "#EXT-X-MAP:URI=\"init.mp4\"\n");
+            if (_auth_token.length()) std_string_append(body, "#EXT-X-MAP:URI=\"init.mp4?authtoken=%s\"\n", _auth_token.c_str());
+            else std_string_append(body, "#EXT-X-MAP:URI=\"init.mp4\"\n");
         }
 
         if (window_size >= window_max)
@@ -811,7 +816,14 @@ bool hls_session::create_response()
             for (size_t i = 0; i < window_size; i++)
             {
                 std_string_append(body, "#EXTINF:%f,\n", content->_window[i]->_meta.duration);
-                std_string_append(body, "%u/payload.%s\n", content->_window[i]->_meta.id, segment_extension);
+                /* Segment requests must carry the credential too. Players
+                 * resolve this URI against the playlist's and drop its query,
+                 * so the token goes in each segment URI. With HTTP Basic the
+                 * player repeats the header by itself. */
+                if (_auth_token.length())
+                    std_string_append(body, "%u/payload.%s?authtoken=%s\n", content->_window[i]->_meta.id, segment_extension, _auth_token.c_str());
+                else
+                    std_string_append(body, "%u/payload.%s\n", content->_window[i]->_meta.id, segment_extension);
             }
         }
 
@@ -1067,33 +1079,21 @@ bool hls_session::create_response()
 
 bool hls_session::authenticate(const std::string &uri, const std::string &request)
 {
-    if (_type == request_type::payload ||
-        !get_listener()->get_auth()) return true;
+    /* Segments (payload) are authenticated like everything else. They used to
+     * be served to anyone: segment numbers are sequential, so the live video
+     * of any camera could be pulled without logging in. Players get the token
+     * in each segment URI of the playlist (see create_response). */
+    if (!get_listener()->get_auth()) return true;
 
     if (uri.find("authtoken=") != std::string::npos)
     {
         std::string token = uri.substr(uri.find("authtoken=") + 10);
-        token = token.substr(0, token.find('/'));  // Drop possible trailing '/streamid=0' etc.
-        /* The token comes from the URL: escape it before it reaches SQL */
-        char *escaped = bc_db_escape_string(token.c_str(), token.length());
-        BC_DB_RES dbres = NULL;
-        if (escaped != NULL)
-        {
-            dbres = bc_db_get_table("SELECT * FROM HlsAuthTokens JOIN Users ON "
-                "HlsAuthTokens.user_id = Users.id WHERE HlsAuthTokens.token='%s'", escaped);
-            free(escaped);
-        }
+        token = token.substr(0, token.find_first_of("/&"));  // Drop possible trailing '/streamid=0', other parameters
 
-        if (dbres)
+        if (get_listener()->check_token(token, _device_id))
         {
-            if (!bc_db_fetch_row(dbres)) 
-            {
-                bc_db_free_table(dbres);
-                _auth_token = token;
-                return true;
-            }
-
-            bc_db_free_table(dbres);
+            _auth_token = token;
+            return true;
         }
     }
 
@@ -1967,6 +1967,91 @@ void hls_listener::reconfigure(hls_config *config)
         bc_log(Error, "Can not unlock pthread mutex: %s", strerror(errno));
         return;
     }
+}
+
+/* Is this live view token valid, and may its user watch this camera?
+ *
+ * The token is checked against the database at most every
+ * HLS_TOKEN_CACHE_SEC: with it now required on every segment, each viewer
+ * would otherwise cost a query every few seconds on the thread that serves
+ * everybody. A token in use also has its date renewed, so the panel's cleanup
+ * of old tokens does not cut off someone who is watching. */
+bool hls_listener::check_token(const std::string &token, int device_id)
+{
+    if (token.empty() || token.length() > 100) return false;
+
+    time_t now = time(NULL);
+    token_info info;
+    bool cached = false;
+
+    pthread_mutex_lock(&_token_mutex);
+    auto it = _tokens.find(token);
+    if (it != _tokens.end())
+    {
+        info = it->second;
+        cached = true;
+    }
+    pthread_mutex_unlock(&_token_mutex);
+
+    if (!cached || now - info.checked >= HLS_TOKEN_CACHE_SEC)
+    {
+        char *escaped = bc_db_escape_string(token.c_str(), token.length());
+        BC_DB_RES dbres = NULL;
+        if (escaped != NULL)
+            dbres = bc_db_get_table("SELECT Users.access_device_list FROM HlsAuthTokens JOIN Users ON "
+                "HlsAuthTokens.user_id = Users.id WHERE HlsAuthTokens.token='%s' LIMIT 1", escaped);
+
+        if (dbres == NULL)
+        {
+            /* Database busy or down: a token seen valid moments ago keeps
+             * working for a while, an unknown one is refused. */
+            free(escaped);
+            if (!cached || now - info.checked >= HLS_TOKEN_STALE_SEC) return false;
+        }
+        else
+        {
+            bool found = !bc_db_fetch_row(dbres);
+            if (found)
+            {
+                const char *blocked = bc_db_get_val(dbres, "access_device_list", NULL);
+                info.blocked = blocked ? blocked : "";
+                info.checked = now;
+                if (!cached) info.refreshed = 0;
+            }
+            bc_db_free_table(dbres);
+
+            if (found && now - info.refreshed >= HLS_TOKEN_REFRESH_SEC)
+            {
+                bc_db_query("UPDATE HlsAuthTokens SET date=now() WHERE token='%s'", escaped);
+                info.refreshed = now;
+            }
+            free(escaped);
+
+            pthread_mutex_lock(&_token_mutex);
+            if (!found) _tokens.erase(token);
+            else
+            {
+                if (_tokens.size() > HLS_TOKEN_CACHE_MAX) _tokens.clear();
+                _tokens[token] = info;
+            }
+            pthread_mutex_unlock(&_token_mutex);
+
+            if (!found) return false;
+        }
+    }
+
+    /* access_device_list holds the cameras this user may NOT see */
+    size_t pos = 0;
+    while (pos < info.blocked.length())
+    {
+        size_t end = info.blocked.find(',', pos);
+        if (end == std::string::npos) end = info.blocked.length();
+        std::string item = info.blocked.substr(pos, end - pos);
+        if (item.find_first_not_of(" ") != std::string::npos && atoi(item.c_str()) == device_id) return false;
+        pos = end + 1;
+    }
+
+    return true;
 }
 
 hls_content* hls_listener::get_hls_content(int id)

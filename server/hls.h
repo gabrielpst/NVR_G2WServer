@@ -389,6 +389,7 @@ public:
 
     void set_auth(bool auth) { _auth = auth; }
     bool get_auth() { return _auth; }
+    bool check_token(const std::string &token, int device_id);
 
 private:
     bool create_socket(uint16_t port);
@@ -396,6 +397,15 @@ private:
     /* HLS window buffer */
     hls_content_map  _content;
     pthread_mutex_t  _mutex;
+
+    /* Live view tokens checked recently (see check_token) */
+    struct token_info {
+        std::string blocked;        /* Users.access_device_list */
+        time_t      checked = 0;    /* last database check */
+        time_t      refreshed = 0;  /* last time its date was renewed */
+    };
+    std::unordered_map<std::string, token_info> _tokens;
+    pthread_mutex_t  _token_mutex = PTHREAD_MUTEX_INITIALIZER;
 
     /* SSL configuration */
 #ifdef BC_HLS_WITH_SSL
