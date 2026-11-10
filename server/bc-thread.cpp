@@ -178,7 +178,7 @@ void bc_record::notify_device_state(const char *state)
 	char id_str[20];
 	snprintf(id_str, sizeof(id_str), "%d", id);
 	execl("/usr/bin/php", "/usr/bin/php", "/usr/share/bluecherry/www/lib/mailer.php", "device_state", id_str, state, NULL);
-	exit(1);
+	_exit(1); /* forked child of a threaded process: no atexit handlers */
 }
 
 void msleep(int duration) {

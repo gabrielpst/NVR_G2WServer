@@ -118,7 +118,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates wget gnupg \
     && apt-get install -y --no-install-recommends \
       nginx php8.3-fpm php8.3-mysql php8.3-gd php8.3-curl php8.3-mbstring \
-      mysql-client rsyslog sudo gsoap libopencv-core406t64 libopencv-imgproc406t64 \
+      mysql-client rsyslog sudo gsoap dnsutils libopencv-core406t64 libopencv-imgproc406t64 \
       libopencv-videoio406t64 libva2 libudev1 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
