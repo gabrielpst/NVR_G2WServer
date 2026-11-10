@@ -561,7 +561,7 @@
                     el('td', { 'data-rotulo': 'Fim', text: t.aberto ? 'gravando agora' : hm(t.fim) }),
                     el('td', { 'data-rotulo': 'Duração', text: dur(t.fim - t.inicio) }),
                     el('td', { 'data-rotulo': 'Tamanho', text: tam(t.bytes) }),
-                    el('td', { class: 'col-acao' }, [ver, el('a', { class: 'botao botao-leve', href: '/gestao/midia?id=' + t.id + '&baixar=1', download: true, text: 'Baixar', 'aria-label': 'Baixar trecho das ' + hm(t.inicio) })])
+                    el('td', { class: 'col-acao' }, [ver, el('a', { class: 'botao botao-leve', href: '/gestao/midia?id=' + t.id + '&baixar=1', text: 'Baixar', 'aria-label': 'Baixar trecho das ' + hm(t.inicio) })])
                 ]));
             });
             var tem = trechos.length > 0;

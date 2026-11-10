@@ -44,7 +44,7 @@ $h = array('G2WGestao', 'h');
     <div class="cartao reprodutor" id="g-reprodutor" hidden>
         <div class="cabecalho-bloco">
             <h2 id="g-titulo-trecho" tabindex="-1">Trecho</h2>
-            <a class="botao botao-principal" id="g-baixar" href="#" download>Baixar este trecho</a>
+            <a class="botao botao-principal" id="g-baixar" href="#">Baixar este trecho</a>
         </div>
         <video id="g-video" controls preload="metadata" playsinline></video>
         <p class="nota">Se o vídeo não abrir no navegador (alguns formatos de câmera não tocam direto), baixe o trecho e abra no computador.</p>
