@@ -54,6 +54,8 @@ int bc_user_auth(const char *username, const char *password, int access_type, in
 	char md5_pwd[16], s_password[256];
 	const char *tmp, *access_field = 0;
 	char *s_username = bc_db_escape_string(username, strlen(username));
+	if (!s_username)
+		return -1;
 	BC_DB_RES dbres = bc_db_get_table("SELECT * FROM Users WHERE username='%s'", s_username);
 	free(s_username);
 	if (!dbres)

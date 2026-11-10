@@ -75,6 +75,45 @@ static void std_string_append(std::string &source, const char *data, ...)
     source.append(buffer, length);
 }
 
+/* Request line only (method and path, no query string): the full request
+ * carries credentials (Authorization header, authtoken) that must stay out of
+ * the log. */
+static std::string request_for_log(const std::string &request)
+{
+    return request.substr(0, request.find_first_of("?\r\n"));
+}
+
+/* handle_request() parses numbers out of the URL with std::stoi, which throws
+ * on anything unexpected; an exception escaping a thread would take the whole
+ * server (and every recording) down. */
+static bool handle_request_safe(hls_session *session, const std::string &request)
+{
+    try
+    {
+        return session->handle_request(request);
+    }
+    catch (const std::exception &e)
+    {
+        return false;
+    }
+}
+
+/* The recording path is taken verbatim from the URL: serve it only if it is a
+ * recording registered in the database, never an arbitrary file. */
+static bool recording_is_known(const std::string &path)
+{
+    char *escaped = bc_db_escape_string(path.c_str(), path.length());
+    if (escaped == NULL) return false;
+
+    BC_DB_RES dbres = bc_db_get_table("SELECT id FROM Media WHERE filepath='%s' LIMIT 1", escaped);
+    free(escaped);
+    if (!dbres) return false;
+
+    bool found = !bc_db_fetch_row(dbres);
+    bc_db_free_table(dbres);
+    return found;
+}
+
 static int sock_shutdown(int fd)
 {
     if (fd >= 0)
@@ -804,7 +843,7 @@ bool hls_session::create_response()
     else if (_type == hls_session::request_type::rec_playlist)
     {
         struct stat buffer;
-        if (lstat(_recording.c_str(), &buffer) < 0)
+        if (!recording_is_known(_recording) || lstat(_recording.c_str(), &buffer) < 0)
         {
             bc_log(Warning, "Requested HLS recording is not found: %s", _recording.c_str());
             std::string response = std::string("HTTP/1.1 404 Not Fount\r\n");
@@ -985,7 +1024,7 @@ bool hls_session::create_response()
     else if (_type == hls_session::request_type::recording)
     {
         struct stat buffer;
-        if (lstat(_recording.c_str(), &buffer) < 0)
+        if (!recording_is_known(_recording) || lstat(_recording.c_str(), &buffer) < 0)
         {
             bc_log(Warning, "Requested HLS recording is not found: %s", _recording.c_str());
             std::string response = std::string("HTTP/1.1 404 Not Fount\r\n");
@@ -1035,8 +1074,15 @@ bool hls_session::authenticate(const std::string &uri, const std::string &reques
     {
         std::string token = uri.substr(uri.find("authtoken=") + 10);
         token = token.substr(0, token.find('/'));  // Drop possible trailing '/streamid=0' etc.
-        BC_DB_RES dbres = bc_db_get_table("SELECT * FROM HlsAuthTokens JOIN Users ON "
-            "HlsAuthTokens.user_id = Users.id WHERE HlsAuthTokens.token='%s'", token.c_str());
+        /* The token comes from the URL: escape it before it reaches SQL */
+        char *escaped = bc_db_escape_string(token.c_str(), token.length());
+        BC_DB_RES dbres = NULL;
+        if (escaped != NULL)
+        {
+            dbres = bc_db_get_table("SELECT * FROM HlsAuthTokens JOIN Users ON "
+                "HlsAuthTokens.user_id = Users.id WHERE HlsAuthTokens.token='%s'", escaped);
+            free(escaped);
+        }
 
         if (dbres)
         {
@@ -1206,7 +1252,7 @@ static void* hls_session_thread(void *ctx)
     uint8_t rx_buffer[HLS_REQUEST_MAX];
 
     /* Read incomming message from the client */
-    int bytes = ssl->ssl_read(rx_buffer, sizeof(rx_buffer), false);
+    int bytes = ssl->ssl_read(rx_buffer, sizeof(rx_buffer) - 1, false);
     if (bytes <= 0)
     {
         bc_log(Error, "%s", ssl->get_last_error().c_str());
@@ -1215,8 +1261,8 @@ static void* hls_session_thread(void *ctx)
 
     /* Parse and handle the request */
     std::string request = std::string((char*)rx_buffer, bytes);
-    if (!session->handle_request(request)) bc_log(Warning, "Rejecting HLS request: (%s) %s", session->get_addr(), request.c_str());
-    else bc_log(Debug, "Received HLS request from: client(%s)[%d]: %s", session->get_addr(), ssl->get_fd(), request.c_str());
+    if (!handle_request_safe(session, request)) bc_log(Warning, "Rejecting HLS request: (%s) %s", session->get_addr(), request_for_log(request).c_str());
+    else bc_log(Debug, "Received HLS request from: client(%s)[%d]: %s", session->get_addr(), ssl->get_fd(), request_for_log(request).c_str());
 
     /* Send response */
     hls_byte_buffer &tx_buffer = session->tx_buffer_get();
@@ -1720,7 +1766,7 @@ int hls_read_event(hls_events *events, hls_events::event_data *ev_data)
         char rx_buffer[HLS_REQUEST_MAX];
 
         /* Read incomming message from the client */
-        int bytes = read(client_fd, rx_buffer, sizeof(rx_buffer));
+        int bytes = read(client_fd, rx_buffer, sizeof(rx_buffer) - 1);
         if (bytes <= 0)
         {
             if (!bytes) bc_log(Debug, "Disconnected HLS client: %s[%d]", session->get_addr(), client_fd);
@@ -1734,11 +1780,15 @@ int hls_read_event(hls_events *events, hls_events::event_data *ev_data)
 
         /* Get completed request */
         std::string request = session->get_request();
-        if (!request.length()) return 0;
+        if (!request.length())
+        {
+            /* Headers never completed: do not buffer without limit */
+            return session->rx_buffer_size() > HLS_REQUEST_MAX * 4 ? -1 : 0;
+        }
 
         /* Parse and handle the request */
-        if (!session->handle_request(request)) bc_log(Warning, "Rejecting HLS request: (%s) %s", session->get_addr(), request.c_str());
-        else bc_log(Debug, "Received HLS request from: client(%s)[%d]: %s", session->get_addr(), client_fd, request.c_str());
+        if (!handle_request_safe(session, request)) bc_log(Warning, "Rejecting HLS request: (%s) %s", session->get_addr(), request_for_log(request).c_str());
+        else bc_log(Debug, "Received HLS request from: client(%s)[%d]: %s", session->get_addr(), client_fd, request_for_log(request).c_str());
 
         /* Callback on writeable */
         return session->writeable();

@@ -206,6 +206,7 @@ public:
 
     void rx_buffer_append(const char *data) { _rx_buffer.append(data); }
     void rx_buffer_advance(size_t size) { _rx_buffer.erase(0, size); }
+    size_t rx_buffer_size() { return _rx_buffer.size(); }
 
     void set_hls_event_data(hls_events::event_data *data) { _ev_data = data; }
     void set_event_handler(hls_events *events) { _events = events; }
