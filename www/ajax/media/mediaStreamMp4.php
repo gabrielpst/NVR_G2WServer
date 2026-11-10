@@ -15,15 +15,21 @@ class mediaStreamMp4 extends Controller {
             die();
         }
 
-        $media_id = $_GET['id'];
+        $media_id = intval($_GET['id']);
 
         # resolve local mediafile name and path from id parameter, using Media table;
-        $query_res = data::query("SELECT filepath FROM Media WHERE id={$media_id} LIMIT 1");
+        $query_res = data::query("SELECT filepath, device_id FROM Media WHERE id={$media_id} LIMIT 1");
         if (empty($query_res)) {
             header("HTTP/1.0 404 Not Found - failed to locate the file");
             die();
         }
-        $filename = $query_res[0]['filepath'];
+        // G2W 2026-11: permissão por câmera (antes bastava estar logado e trocar o id)
+        if (!$this->user->camPermission($query_res[0]['device_id'])) {
+            header("HTTP/1.0 403 Forbidden");
+            die();
+        }
+        // o caminho vai pra linha de comando do ffprobe/ffmpeg logo abaixo
+        $filename = escapeshellarg($query_res[0]['filepath']);
 
         # check video codec, using ffprobe and its parsable output (see -show-format -show-streams);
         $ffprobe_output = shell_exec("LD_LIBRARY_PATH=/usr/lib/bluecherry/ /usr/lib/bluecherry/ffprobe -show_format -show_streams -print_format flat $filename");
@@ -89,7 +95,7 @@ class mediaStreamMp4 extends Controller {
         # for MP4 format), output the file contents to stdout, indicating content type
         # in HTTP headers.
         if (Inp::get('download')) {
-            $filename = str_replace('.mkv', '.mp4', $filename);
+            $filename = str_replace('.mkv', '.mp4', $query_res[0]['filepath']);
             downloadFile($outfile, $filename);
         } else downloadFile($outfile);
 

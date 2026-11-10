@@ -32,7 +32,8 @@ class playback extends Controller {
         $id = (int) $this->uri->three;
         if ($id) {
             $info = data::query("SELECT * FROM Media WHERE id={$id}");
-            if (!empty($info)) {
+            // G2W 2026-11: permissão por câmera (antes bastava trocar o id)
+            if (!empty($info) && $this->user->camPermission($info[0]['device_id'])) {
                 $file_info = pathinfo($info[0]['filepath']);
                 downloadFile($info[0]['filepath'], $file_info['basename'], false);
             }
