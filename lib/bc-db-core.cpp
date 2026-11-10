@@ -32,45 +32,56 @@ enum bc_db_type {
 };
 
 static pthread_mutex_t db_lock = PTHREAD_MUTEX_INITIALIZER;
-static bool db_lock_available = true; // Track if database lock is available
 static struct bc_db_ops *db_ops = NULL;
 
-static void bc_db_lock(void)
+/* How long to wait for another thread's database operation before giving up */
+#define BC_DB_LOCK_TIMEOUT_SEC 30
+
+/* Nesting depth of db_lock in this thread; the mutex is owned while > 0 */
+static thread_local int db_lock_depth = 0;
+
+/* Returns false if the lock could not be taken. The caller must then fail its
+ * operation WITHOUT touching the database: the connection is shared, and a
+ * query sent while another thread is in the middle of its own corrupts both
+ * (and unlocking a mutex this thread does not own releases the other
+ * thread's exclusion). A database error is recoverable; that is not. */
+static bool bc_db_lock(void)
 {
-	// CRITICAL FIX: Add timeout to prevent database deadlock
+	if (db_lock_depth > 0) {
+		/* Already ours (inside a transaction of this thread) */
+		db_lock_depth++;
+		return true;
+	}
+
 	struct timespec timeout;
 	clock_gettime(CLOCK_REALTIME, &timeout);
-	timeout.tv_sec += 10; // 10 second timeout for database operations
-	
-	if (pthread_mutex_timedlock(&db_lock, &timeout) != 0) {
-		// Log error but don't crash - this is critical for server stability
-		fprintf(stderr, "CRITICAL: Database lock timeout - potential deadlock detected\n");
-		// CRITICAL FIX: Don't continue without lock - this causes transaction conflicts
-		// Instead, try one more time with a shorter timeout
-		timeout.tv_sec = 2; // 2 second retry timeout
-		if (pthread_mutex_timedlock(&db_lock, &timeout) != 0) {
-			fprintf(stderr, "CRITICAL: Database lock retry failed - server may be overloaded\n");
-			// Mark database as unavailable for transactions
-			db_lock_available = false;
-			return;
-		}
+	timeout.tv_sec += BC_DB_LOCK_TIMEOUT_SEC;
+
+	int ret = pthread_mutex_timedlock(&db_lock, &timeout);
+	if (ret != 0) {
+		bc_log(Error, "Database is busy: lock not obtained in %d s (%s), operation not executed",
+			BC_DB_LOCK_TIMEOUT_SEC, strerror(ret));
+		return false;
 	}
-	db_lock_available = true;
+
+	db_lock_depth = 1;
+	return true;
 }
 
 static void bc_db_unlock(void)
 {
-	pthread_mutex_unlock(&db_lock);
+	if (db_lock_depth <= 0)
+		return;
+
+	if (--db_lock_depth == 0)
+		pthread_mutex_unlock(&db_lock);
 }
 
 int bc_db_start_trans(void)
 {
 	int ret = 0;
 
-	bc_db_lock();
-	
-	// CRITICAL FIX: Check if database lock is available
-	if (!db_lock_available) {
+	if (!bc_db_lock()) {
 		bc_log(Error, "Cannot start transaction - database lock unavailable");
 		return -1;
 	}
@@ -87,6 +98,10 @@ int bc_db_start_trans(void)
 int bc_db_commit_trans(void)
 {
 	int ret = 0;
+
+	if (db_lock_depth <= 0)
+		return -1;
+
 	if (db_ops->commit_trans)
 		ret = db_ops->commit_trans();
 	if (!ret)
@@ -97,6 +112,10 @@ int bc_db_commit_trans(void)
 int bc_db_rollback_trans(void)
 {
 	int ret = 0;
+
+	if (db_lock_depth <= 0)
+		return -1;
+
 	if (db_ops->rollback_trans)
 		ret = db_ops->rollback_trans();
 	bc_db_unlock();
@@ -193,7 +212,10 @@ int bc_db_query(const char *sql, ...)
 		return -1;
 	va_end(ap);
 
-	bc_db_lock();
+	if (!bc_db_lock()) {
+		free(query);
+		return -1;
+	}
 	ret = db_ops->query(query);
 	bc_db_unlock();
 
@@ -234,7 +256,10 @@ BC_DB_RES bc_db_get_table(const char *sql, ...)
 		return NULL;
 	va_end(ap);
 
-	bc_db_lock();
+	if (!bc_db_lock()) {
+		free(query);
+		return NULL;
+	}
 	dbres = db_ops->get_table(query);
 	bc_db_unlock();
 
@@ -320,7 +345,10 @@ char *bc_db_escape_string(const char *from, size_t len)
 		return NULL;
 
 	/* MySQL requires locking around mysql_real_escape_string */
-	bc_db_lock();
+	if (!bc_db_lock()) {
+		free(to);
+		return NULL;
+	}
 	db_ops->escape_string(to, from, len);
 	bc_db_unlock();
 
