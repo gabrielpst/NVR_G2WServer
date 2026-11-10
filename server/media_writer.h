@@ -30,6 +30,7 @@ protected:
 	/* Consecutive packets refused by the muxer; see write_packet() */
 	enum { MAX_REJECTED_IN_A_ROW = 30 };
 	int rejected_in_a_row = 0;
+	time_t last_rejected_warning = 0;
 	
 	/* Track logging state to prevent spam */
 	bool frame_rate_warned[2] = {false, false};

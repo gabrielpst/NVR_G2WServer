@@ -538,7 +538,6 @@ int bc_streaming_packet_write(struct bc_record *bc_rec, const stream_packet &pkt
 	} else if (pkt.type == AVMEDIA_TYPE_AUDIO) {
 		ctx_index = 1;
 	} else {
-		bc_rec->log.log(Warning, "Got unknown packet type, ignoring.");
 		return 0;
 	}
 
@@ -667,11 +666,8 @@ int bc_streaming_hls_packet_write(struct bc_record *bc_rec, const stream_packet 
 	if (ctx_index >= (int)ctx->nb_streams || !ctx->streams[ctx_index])
 		return 0;
 
-	if (lv.hls_wait_keyframe) {
-		if (!is_video_key)
-			return 0;
-		lv.hls_wait_keyframe = false;
-	}
+	if (lv.hls_wait_keyframe && !is_video_key)
+		return 0;
 
 	/* Stall watchdog: the camera is delivering keyframes (each one should cut
 	 * a segment) yet no segment has come out. Recreate this camera's muxer;
@@ -740,6 +736,9 @@ int bc_streaming_hls_packet_write(struct bc_record *bc_rec, const stream_packet 
 	src_pts += lv.hls_ts_offset;
 	if (lv.hls_ref_ts == AV_NOPTS_VALUE || src_dts > lv.hls_ref_ts)
 		lv.hls_ref_ts = src_dts;
+
+	/* Past every check that can still drop this packet: the muxer starts here */
+	lv.hls_wait_keyframe = false;
 
 	av_init_packet(&opkt);
 	opkt.flags        = (pkt.flags & stream_packet::KeyframeFlag) ? AV_PKT_FLAG_KEY : 0;

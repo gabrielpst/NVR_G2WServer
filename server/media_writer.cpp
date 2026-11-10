@@ -323,9 +323,12 @@ bool media_writer::write_packet(const stream_packet &pkt)
 			 * whole keyframe interval of video. Skip the packet and give up
 			 * only if the muxer keeps refusing everything. */
 			if (++rejected_in_a_row <= MAX_REJECTED_IN_A_ROW) {
-				if (rejected_in_a_row == 1)
+				time_t now = time(nullptr);
+				if (now - last_rejected_warning >= 60) {
+					last_rejected_warning = now;
 					bc_log(Warning, "Recording muxer rejected a packet (bad timestamp?), "
 						"skipping it and continuing the file");
+				}
 				return true;
 			}
 			bc_log(Error, "Error writing frame to recording. Likely timestamping problem.");

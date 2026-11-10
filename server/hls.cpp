@@ -1860,6 +1860,8 @@ int hls_event_callback(void *events, void* data, int reason)
         case HLS_EVENT_EXCEPTION:
             /* Left registered, a level-triggered error condition is reported
              * again on every epoll_wait: busy loop and a leaked session. */
+            /* Sessions only: removing the listener would close its socket. */
+            if (ev_data->type != hls_events::type::session) break;
             bc_log(Debug, "HLS Connection error: fd(%d)", ev_data->fd);
             pevents->remove(ev_data);
             break;
