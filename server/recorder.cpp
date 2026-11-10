@@ -46,7 +46,29 @@ void recorder::run()
 
 		stream_packet packet = buffer.front();
 		buffer.pop_front();
+
+		/* Without pre-record the buffer only holds what is still to be
+		 * written, so whatever its bound trimmed never reached the file. */
+		if (!buffer.duration()) {
+			unsigned long packets;
+			time_t seconds;
+
+			buffer.take_trimmed(&packets, &seconds);
+			lost_packets += packets;
+			lost_seconds += seconds;
+		}
 		l.unlock();
+
+		/* A frame or two trimmed at a keyframe is routine; a hole is not */
+		if ((lost_seconds >= 2 || lost_packets >= 50) &&
+		    packet.ts_monotonic - lost_reported >= 60) {
+			bc_log(Error, "Recording fell behind the camera: %lu packets (about %ld s of video) "
+				"were dropped before being written. Slow disk or database?",
+				lost_packets, (long)lost_seconds);
+			lost_reported = packet.ts_monotonic;
+			lost_packets = 0;
+			lost_seconds = 0;
+		}
 
 		if (!packet.data()) {
 			/* Null packets force recording end */

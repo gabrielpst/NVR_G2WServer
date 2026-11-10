@@ -27,6 +27,9 @@ protected:
 
 	/* Control monotonicity of timestamps we feed to muxer, the same way as in ffmpeg_mux.c in ffmpeg.*/
 	int64_t last_mux_dts[2] = {0, 0};
+	/* Consecutive packets refused by the muxer; see write_packet() */
+	enum { MAX_REJECTED_IN_A_ROW = 30 };
+	int rejected_in_a_row = 0;
 	
 	/* Track logging state to prevent spam */
 	bool frame_rate_warned[2] = {false, false};

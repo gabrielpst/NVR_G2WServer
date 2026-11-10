@@ -148,6 +148,8 @@ void stream_keyframe_buffer::apply_bound()
 		if (!mEnforced && it == begin()+1)
 			break;
 
+		mTrimmedPackets += it - begin();
+		mTrimmedSeconds += it->ts_monotonic - begin()->ts_monotonic;
 		erase(begin(), it);
 		break;
 	}

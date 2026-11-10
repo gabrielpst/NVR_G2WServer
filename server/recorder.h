@@ -34,6 +34,11 @@ private:
 
 	bc_event_cam_t current_event;
 	time_t first_packet_ts_monotonic;
+
+	/* Packets trimmed from the buffer before this thread could write them */
+	unsigned long lost_packets = 0;
+	time_t lost_seconds = 0;
+	time_t lost_reported = 0;
 	std::string snapshot_filename;
 
 	int snapshots_limit;  /* TODO Optionize */

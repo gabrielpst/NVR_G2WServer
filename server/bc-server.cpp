@@ -84,6 +84,10 @@ struct media_record {
 	int id;
 	int media_id;
 	int duration;
+	/* Used when the file has data but no readable duration */
+	int fallback_duration;
+	time_t start;
+	off_t bytes;
 	std::string filepath;
 };
 
@@ -1484,14 +1488,27 @@ static void get_last_run_date()
 		bc_db_free_table(dbres);
 }
 
+/* Duration in whole seconds of a recording file; 0 if it cannot be read */
+static int media_file_duration(const char *path)
+{
+	AVFormatContext *ctx = NULL;
+	int duration = 0;
+
+	if (avformat_open_input(&ctx, path, NULL, NULL) < 0)
+		return 0;
+
+	if (avformat_find_stream_info(ctx, NULL) >= 0 &&
+	    ctx->duration != AV_NOPTS_VALUE && ctx->duration > 0)
+		duration = (ctx->duration + AV_TIME_BASE - 1) / AV_TIME_BASE;
+
+	avformat_close_input(&ctx);
+	return duration;
+}
+
 static void *bc_update_abandoned_media_threadproc(void *arg)
 {
 	bc_log(Info, "started processing abandoned recordings");
 	while(!abandoned_media_to_update.empty()) {
-		char cmd[4096];
-		char *line = NULL;
-		size_t len = 0;
-		FILE *fp;
 		struct media_record m;
 
 		m = abandoned_media_to_update.front();
@@ -1511,26 +1528,13 @@ static void *bc_update_abandoned_media_threadproc(void *arg)
 			continue;
 		}
 
-		snprintf(cmd, sizeof(cmd), "mkvinfo -v %s", m.filepath.c_str());
-
-		fp = popen(cmd, "r");
-		if (fp == NULL) {
-			bc_log(Warning, "Failed to execute mkvinfo for %s", m.filepath.c_str());
-			abandoned_media_to_update.pop();
-			continue;
-		}
-
-		while (getline(&line, &len, fp) >= 0) {
-			char *p;
-			if ((p = strstr(line, "timecode ")))
-				sscanf(p, "timecode %d.", &m.duration);
-			free(line);
-			line = NULL;
-			len = 0;
-		}
-
-		free(line);
-		pclose(fp);
+		/* Recordings are MP4: mkvinfo (used here before) never found a
+		 * duration in them, so every recording left open at a restart
+		 * was taken for empty and deleted. Ask libavformat instead. */
+		m.duration = media_file_duration(m.filepath.c_str());
+		m.bytes = st.st_size;
+		if (!m.duration && st.st_mtime > m.start)
+			m.fallback_duration = st.st_mtime - m.start;
 
 		pthread_mutex_lock(&mutex_abandoned_media);
 		abandoned_media_updated.push(m);
@@ -1554,7 +1558,16 @@ static void bc_check_abandoned_media_updates()
 		m = abandoned_media_updated.front();
 		pthread_mutex_unlock(&mutex_abandoned_media);
 
-		if (!m.duration) {
+		if (!m.duration && m.bytes > 0) {
+			/* Has data but no readable index (the server died while
+			 * writing it). Not playable as is, but it is footage that
+			 * repair tools can recover: keep it, close the event. */
+			bc_log(Warning, "Abandoned recording %s (%ld bytes) has no readable duration; "
+				"kept on disk, event closed with length %d", m.filepath.c_str(),
+				(long)m.bytes, m.fallback_duration);
+			bc_db_query("UPDATE EventsCam SET length=%d WHERE "
+				    "id=%d", m.fallback_duration, m.id);
+		} else if (!m.duration) {
 			bc_log(Info, "Deleting empty media %s", m.filepath.c_str());
 			bc_db_query("DELETE FROM Media WHERE id=%u", m.media_id);
 
@@ -1616,6 +1629,9 @@ static void bc_check_inprogress(void)
 		m.media_id = m_id;
 		m.filepath = std::string(filepath);
 		m.duration = 0;
+		m.fallback_duration = 0;
+		m.bytes = 0;
+		m.start = bc_db_get_val_int(dbres, "time");
 
 		// Validate the file exists before queuing
 		struct stat st;

@@ -335,9 +335,22 @@ public:
 	bool enforce_keyframe() const { return mEnforced; }
 	void set_enforce_keyframe(bool enforced);
 
+	/* Packets removed by the bound since the last call, and the capture time
+	 * they spanned. For a consumer that pops what it processes, these are
+	 * packets it never got to: it was too slow and they are lost. */
+	void take_trimmed(unsigned long *packets, time_t *seconds)
+	{
+		*packets = mTrimmedPackets;
+		*seconds = mTrimmedSeconds;
+		mTrimmedPackets = 0;
+		mTrimmedSeconds = 0;
+	}
+
 protected:
 	unsigned mDuration;
 	bool mEnforced;
+	unsigned long mTrimmedPackets = 0;
+	time_t mTrimmedSeconds = 0;
 
 	virtual void apply_bound();
 };

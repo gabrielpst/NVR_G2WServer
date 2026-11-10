@@ -138,6 +138,22 @@ bool media_writer::write_packet(const stream_packet &pkt)
 	static_assert(AVMEDIA_TYPE_AUDIO == 1);
 	int64_t &last_mux_dts = this->last_mux_dts[pkt.type];
 	bool update_last_mux_dts = true;
+
+	/* A packet without DTS (common in the first packets after a camera
+	 * reconnects, and on RTMP-relayed streams) used to be handed to the muxer
+	 * as is; the muxer refused it and the caller closed the recording file,
+	 * losing everything up to the next keyframe. Give it a DTS instead: its
+	 * PTS, or the position right after the previous packet. The ordering
+	 * rules below then apply to it like to any other packet. */
+	if (opkt.dts == AV_NOPTS_VALUE) {
+		if (opkt.pts != AV_NOPTS_VALUE)
+			opkt.dts = opkt.pts;
+		else if (last_mux_dts != AV_NOPTS_VALUE)
+			opkt.dts = opkt.pts = last_mux_dts + 1;
+		else
+			opkt.dts = opkt.pts = 0;
+	}
+
 	if (opkt.dts == AV_NOPTS_VALUE) {
 		// Do nothing.
 		// In ffmpeg, ffmpeg_mux.c:write_packet() does nothing and
@@ -292,11 +308,26 @@ bool media_writer::write_packet(const stream_packet &pkt)
 		}
 	}
 
+	/* The muxer rejects a presentation time earlier than the decoding time */
+	if (opkt.pts != AV_NOPTS_VALUE && opkt.dts != AV_NOPTS_VALUE && opkt.pts < opkt.dts)
+		opkt.pts = opkt.dts;
+
 	auto last_mux_dts_uncommitted = opkt.dts; // opkt.dts is lost as av_interleaved_write_frame() frees opkt
 	re = av_interleaved_write_frame(out_ctx, &opkt);
 	if (re < 0)
 	{
 		if (re == AVERROR(EINVAL)) {
+			/* The muxer refused this one packet; the file is still good.
+			 * Returning failure makes the recorder close the file and wait
+			 * for the next keyframe, so a single bad timestamp cost up to a
+			 * whole keyframe interval of video. Skip the packet and give up
+			 * only if the muxer keeps refusing everything. */
+			if (++rejected_in_a_row <= MAX_REJECTED_IN_A_ROW) {
+				if (rejected_in_a_row == 1)
+					bc_log(Warning, "Recording muxer rejected a packet (bad timestamp?), "
+						"skipping it and continuing the file");
+				return true;
+			}
 			bc_log(Error, "Error writing frame to recording. Likely timestamping problem.");
 			// Try to recover by resetting the timestamp tracking
 			last_mux_dts = AV_NOPTS_VALUE;
@@ -315,6 +346,7 @@ bool media_writer::write_packet(const stream_packet &pkt)
 		update_last_mux_dts = false;
 		return false;
 	}
+	rejected_in_a_row = 0;
 	if (update_last_mux_dts) {
 		last_mux_dts = last_mux_dts_uncommitted;
 	}
@@ -325,6 +357,7 @@ bool media_writer::write_packet(const stream_packet &pkt)
 void media_writer::close()
 {
 	video_st = audio_st = NULL;
+	rejected_in_a_row = 0;
 	for (int i = 0; i < sizeof(last_mux_dts)/sizeof(last_mux_dts[0]); i++) {
 		last_mux_dts[i] = AV_NOPTS_VALUE;
 		frame_rate_warned[i] = false;
@@ -337,10 +370,22 @@ void media_writer::close()
 		// SAFE CLEANUP: Add null pointer checks before accessing context
 		if (out_ctx->pb) {
 			// Only write trailer if the context is still valid
-			if (out_ctx->nb_streams > 0 && out_ctx->streams[0]) {
-				av_write_trailer(out_ctx);
+			/* The MP4 index (moov) is written only here: if this fails
+			 * (disk full, I/O error) the whole file is unplayable. */
+			int re = 0;
+			if (out_ctx->nb_streams > 0 && out_ctx->streams[0])
+				re = av_write_trailer(out_ctx);
+			if (re >= 0 && out_ctx->pb->error < 0)
+				re = out_ctx->pb->error;
+			int re_close = avio_close(out_ctx->pb);
+			if (re >= 0)
+				re = re_close;
+			if (re < 0) {
+				char err[128] = { 0 };
+				av_strerror(re, err, sizeof(err));
+				bc_log(Error, "Failed to finish recording file %s: %s. The file may be unplayable",
+					out_ctx->url ? out_ctx->url : "?", err);
 			}
-			avio_close(out_ctx->pb);
 		}
 
 		avformat_free_context(out_ctx);
