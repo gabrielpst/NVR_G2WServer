@@ -49,7 +49,9 @@
         if (!p || OPCOES.indexOf(String(p.quantas)) < 0 || !Array.isArray(p.quadros)) {
             return arrumar('todas', []);
         }
-        return arrumar(String(p.quantas), p.quadros, true);
+        // ids sempre como número (é assim que a lista de câmeras vem do servidor)
+        var ids = p.quadros.map(function (v) { var n = parseInt(v, 10); return (v === null || isNaN(n)) ? null : n; });
+        return arrumar(String(p.quantas), ids, true);
     }
 
     function salvarPref() {
@@ -174,7 +176,8 @@
             trocar.addEventListener('click', function () { abrirEscolha(pos); });
             // clicar em qualquer ponto do quadro também abre a troca (o botão fica para o teclado)
             raiz.addEventListener('click', function (ev) {
-                if (!ev.target.closest('.av-botoes') && !document.fullscreenElement) abrirEscolha(pos);
+                // (com o próprio quadro em tela cheia o clique não faz nada: o diálogo ficaria por baixo)
+                if (!ev.target.closest('.av-botoes') && document.fullscreenElement !== raiz) abrirEscolha(pos);
             });
             cheia.addEventListener('click', function () { telaCheia(raiz, video); });
             botaoSom.addEventListener('click', function () {
@@ -188,6 +191,8 @@
                     if (estado !== 'aovivo' && estado !== 'foto') aoVivo();
                 }
             });
+            // só vale no HLS nativo (iPhone/iPad); com o hls.js quem avisa é o evento ERROR dele
+            video.addEventListener('error', function () { if (!hls && estado !== 'foto' && estado !== 'parado' && video.getAttribute('src')) semSinal(); });
             foto.addEventListener('error', function () { foto.hidden = true; });
             foto.addEventListener('load', function () { foto.hidden = false; });
         }
@@ -201,6 +206,7 @@
 
         function aoVivo() {
             tentativa = 0;
+            errosMidia = 0;
             semSinalDesde = null;
             marcar('aovivo', 'Ao vivo');
         }
@@ -216,6 +222,7 @@
             if (!vivo || encerrado || estado === 'foto') return;
             desligarTocador();
             if (!semSinalDesde) semSinalDesde = new Date();
+            porFoto();
             marcar('semsinal', 'Sem sinal desde ' + hora(semSinalDesde), 'Tentando de novo…');
             var espera = Math.min(30000, 3000 * Math.pow(2, tentativa));
             tentativa++;
@@ -224,7 +231,16 @@
 
         function soFoto(motivo) {
             desligarTocador();
+            porFoto();
             marcar('foto', 'Só foto' + (cam.foto_hora ? ' · ' + cam.foto_hora : ''), motivo);
+        }
+
+        /* Foto mais recente por baixo do vídeo. Com o vídeo tocando ela fica
+         * escondida, então só é buscada quando vai aparecer. */
+        function porFoto() {
+            if (!cam || !foto || !cam.foto_ts) return;
+            var src = '/media/request?mode=livesnapshot&id=' + cam.id + '&t=' + cam.foto_ts;
+            if (foto.getAttribute('src') !== src) foto.setAttribute('src', src);
         }
 
         function iniciar() {
@@ -243,7 +259,6 @@
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     // iPhone/iPad: o próprio navegador toca
                     video.src = url;
-                    video.addEventListener('error', semSinal, { once: true });
                     var p = video.play();
                     if (p && p.catch) p.catch(function () { /* espera o toque do usuário */ });
                 } else {
@@ -318,16 +333,18 @@
             },
             atualizarFoto: function () {
                 if (!cam || !foto) return;
-                if (cam.foto_ts) {
-                    var src = '/media/request?mode=livesnapshot&id=' + cam.id + '&t=' + cam.foto_ts;
-                    if (foto.getAttribute('src') !== src) foto.setAttribute('src', src);
-                }
+                if (estado !== 'aovivo') porFoto();
                 if (estado === 'foto') rotulo.textContent = 'Só foto' + (cam.foto_hora ? ' · ' + cam.foto_hora : '');
             },
             vigiar: function () {
                 if (!cam || !vivo || encerrado) return;
                 var agora = Date.now();
-                if (estado === 'aovivo' && agora - ultimoAvanco > SEM_AVANCO_MS) {
+                if (estado === 'aovivo' && video.paused) {
+                    // o navegador pausa vídeo mudo fora da área visível (celular): não é queda
+                    ultimoAvanco = agora;
+                    var p = video.play();
+                    if (p && p.catch) p.catch(function () { /* volta quando estiver visível */ });
+                } else if (estado === 'aovivo' && agora - ultimoAvanco > SEM_AVANCO_MS) {
                     semSinal();
                 } else if (estado === 'conectando' && agora - iniciadoEm > ESPERA_INICIO_MS) {
                     // pedaços chegando e nada na tela = o navegador não decodifica este formato

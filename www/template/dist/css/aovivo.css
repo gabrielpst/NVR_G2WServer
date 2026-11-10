@@ -135,3 +135,9 @@
 @media (prefers-reduced-motion: no-preference) {
   .av-botoes, .av-foto { transition: opacity .15s; }
 }
+
+/* celular deitado com recorte de tela: a grade não entra embaixo do recorte */
+@supports (padding: max(0px)) {
+  .aovivo { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+  @media (min-width: 700px) { .aovivo { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); } }
+}
