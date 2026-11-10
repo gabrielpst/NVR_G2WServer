@@ -449,9 +449,14 @@ bool hls_events::remove(hls_events::event_data *data)
 
 bool hls_events::service(int timeout_ms)
 {
-    int count; /* Wait for ready events */
+    /* Wait for ready events. Only a call that itself failed with EINTR is
+     * retried: errno is not cleared by a successful call, so testing it alone
+     * left this thread spinning forever (no HLS request answered again) after
+     * the first interrupted wait, e.g. when the container is frozen and
+     * thawed for a backup snapshot. */
+    int count;
     do count = epoll_wait(event_fd, event_array, events_max, timeout_ms);
-    while (errno == EINTR);
+    while (count < 0 && errno == EINTR);
 
     for (int i = 0; i < count; i++)
     {
@@ -1776,6 +1781,13 @@ int hls_event_callback(void *events, void* data, int reason)
             break;
         case HLS_EVENT_HUNGED:
             bc_log(Warning, "HLS Connection hunged: fd(%d)", ev_data->fd);
+            pevents->remove(ev_data);
+            break;
+        case HLS_EVENT_ERROR:
+        case HLS_EVENT_EXCEPTION:
+            /* Left registered, a level-triggered error condition is reported
+             * again on every epoll_wait: busy loop and a leaked session. */
+            bc_log(Debug, "HLS Connection error: fd(%d)", ev_data->fd);
             pevents->remove(ev_data);
             break;
         case HLS_EVENT_CLOSED:
