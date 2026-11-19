@@ -1,0 +1,100 @@
+/* G2W Monitor — telas de entrada (/login e /changepwd). Folha própria, sem framework,
+ * com a mesma paleta do gestao.css. */
+
+:root {
+  color-scheme: light;
+  --verde-fundo: #0A1F1A;
+  --verde-fundo-2: #123328;
+  --verde: #2F7A3A;
+  --verde-vivo: #4A9147;
+  --cartao: #FFFFFF;
+  --borda: #D9E1DB;
+  --texto: #16231C;
+  --texto-2: #4E5F55;
+  --erro: #B3261E;
+  --erro-suave: #FCEBE9;
+  --neutro-suave: #ECEFED;
+  --foco: 0 0 0 3px #fff, 0 0 0 5px #1B6FD0;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px 16px;
+  color: var(--texto);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background:
+    radial-gradient(900px 520px at 50% -10%, rgba(74, 145, 71, .28), transparent 70%),
+    linear-gradient(160deg, var(--verde-fundo) 0%, #061410 100%);
+  background-attachment: fixed;
+}
+h1, p { margin: 0; }
+[hidden] { display: none !important; }
+
+.entrar {
+  width: 100%;
+  max-width: 400px;
+  background: var(--cartao);
+  border-radius: 16px;
+  padding: 32px 28px 28px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .2);
+}
+.entrar-marca { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 24px; }
+.entrar-marca img { width: 76px; height: 76px; border-radius: 18px; display: block; margin-bottom: 14px; }
+.entrar-marca h1 { font-size: 1.5rem; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; }
+.entrar-marca h1 span { color: var(--verde); }
+.entrar-marca p { color: var(--texto-2); font-size: .9375rem; margin-top: 4px; }
+
+.entrar form { display: grid; gap: 14px; }
+.campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.campo label { font-weight: 600; font-size: .9375rem; }
+.campo small { color: var(--texto-2); font-size: .8125rem; line-height: 1.4; }
+.campo input {
+  width: 100%; min-height: 48px; padding: 10px 14px;
+  font: inherit; color: var(--texto); background: #fff;
+  border: 1px solid #B9C5BD; border-radius: 10px;
+}
+.campo input:focus-visible { outline: 2px solid transparent; box-shadow: var(--foco); border-color: #1B6FD0; }
+.campo-senha { position: relative; }
+.campo-senha input { padding-right: 84px; }
+.ver-senha {
+  position: absolute; right: 4px; top: 4px; bottom: 4px;
+  min-width: 72px; padding: 0 10px;
+  font: inherit; font-size: .875rem; font-weight: 600; color: var(--verde);
+  background: transparent; border: 0; border-radius: 8px; cursor: pointer;
+}
+.ver-senha:hover { background: var(--neutro-suave); }
+.ver-senha:focus-visible { outline: 2px solid transparent; box-shadow: var(--foco); }
+
+.erro-form {
+  background: var(--erro-suave); color: var(--erro);
+  border-left: 4px solid var(--erro); border-radius: 8px;
+  padding: 10px 12px; font-size: .9375rem;
+}
+
+.botao-entrar {
+  min-height: 50px; margin-top: 4px; padding: 10px 16px;
+  font: inherit; font-weight: 700; font-size: 1.0625rem; color: #fff;
+  background: var(--verde); border: 1px solid var(--verde); border-radius: 10px; cursor: pointer;
+  transition: background-color .15s ease;
+}
+.botao-entrar:hover { background: #256530; }
+.botao-entrar:focus-visible { outline: 2px solid transparent; box-shadow: var(--foco); }
+.botao-entrar:disabled { opacity: .65; cursor: progress; }
+
+.entrar-rodape { color: rgba(255, 255, 255, .62); font-size: .8125rem; text-align: center; }
+
+@media (max-width: 420px) {
+  .entrar { padding: 26px 20px 22px; border-radius: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .botao-entrar { transition: none; }
+}

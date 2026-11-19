@@ -1,93 +1,52 @@
-<?php defined('INDVR') or exit();  ?>
-
+<?php defined('INDVR') or exit();
+$g2w_v = @filemtime(__DIR__.'/dist/css/entrar.css').'-'.@filemtime(__DIR__.'/dist/js/entrar.js');
+?>
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="pt-BR">
 <head>
-
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="<?php echo DVR_COMPANY_NAME; ?>">
-    <meta name="author" content="<?php echo DVR_COMPANY_NAME; ?>">
-
-	<link rel="icon" href="/favicon.ico">
-	<title><?php echo DVR_COMPANY_NAME.' '.DVR_DVR.PAGE_HEADER_SEPARATOR.PAGE_HEADER_MAIN; ?></title>
-
-    <!-- Bootstrap Core CSS -->
-    <link href="/template/bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- MetisMenu CSS -->
-    <link href="/template/bower_components/metisMenu/dist/metisMenu.min.css" rel="stylesheet">
-
-    <!-- Custom CSS -->
-    <link href="/template/dist/css/sb-admin-2.css" rel="stylesheet">
-
-    <!-- Custom CSS -->
-    <link href="/template/dist/css/main.css?v=<?php echo time(); ?>" rel="stylesheet">
-    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
-    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
-    <!--[if lt IE 9]>
-        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
-        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
-    <![endif]-->
-
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#0A1F1A">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/img/icone-g2w.png">
+    <title>Nova senha · G2W Monitor</title>
+    <link href="/template/dist/css/entrar.css?v=<?php echo $g2w_v; ?>" rel="stylesheet">
 </head>
-
 <body>
-
-    <div class="container">
-        <div class="row">
-            <div class="col-md-4 col-md-offset-4">
-                <div class="login-panel text-center">
-                    <img id="login-logo" src="/img/logo.png">
-                </div>
-            </div>
-        </div><br>
-        <div class="row">
-            <div class="col-md-4 col-md-offset-4">
-                <div class="panel panel-default">
-                    <div class="panel-heading">Please Enter New Password
-                    </div>
-                    <div class="panel-body">
-                        <form role="form" method="post" action="/changepwd">
-                            <fieldset>
-                                <div class="form-group">
-                                    <input class="form-control" placeholder="Password" name="password" type="password" value="">
-                                </div>
-                                <div class="form-group">
-                                    <input class="form-control" placeholder="Confirm New Password" name="confirm_password" type="password" value="">
-                                </div>
-                                <!-- Change this to a button or input when using this as a form -->
-                                <div class="form-group">
-                                    <button type="submit" class="btn btn-lg btn-success btn-block send-req-form">Change Password</button>
-                                </div>
-
-                                <div class="form-group">
-                                    <div class="alert alert-ajax alert-danger"></div>
-                                </div>
-                            </fieldset>
-                        </form>
-                    </div>
-                </div>
-            </div>
+    <main class="entrar">
+        <div class="entrar-marca">
+            <img src="/img/icone-g2w.png" alt="" width="76" height="76">
+            <h1>Crie sua senha</h1>
+            <p>No primeiro acesso é preciso trocar a senha recebida</p>
         </div>
-    </div>
 
-    <!-- jQuery -->
-    <script src="/template/bower_components/jquery/dist/jquery.min.js"></script>
+        <form method="post" action="/changepwd" data-entrar novalidate>
+            <div class="campo">
+                <label for="password">Nova senha</label>
+                <div class="campo-senha">
+                    <input id="password" name="password" type="password" placeholder=" "
+                           autocomplete="new-password" required autofocus data-vazio="Informe a nova senha.">
+                    <button type="button" class="ver-senha" aria-controls="password" aria-pressed="false">Mostrar</button>
+                </div>
+            </div>
+            <div class="campo">
+                <label for="confirm_password">Repita a nova senha</label>
+                <div class="campo-senha">
+                    <input id="confirm_password" name="confirm_password" type="password" placeholder=" "
+                           autocomplete="new-password" required data-vazio="Repita a nova senha.">
+                    <button type="button" class="ver-senha" aria-controls="confirm_password" aria-pressed="false">Mostrar</button>
+                </div>
+            </div>
 
-    <!-- Bootstrap Core JavaScript -->
-    <script src="/template/bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+            <p class="erro-form" role="alert" hidden></p>
 
-    <!-- Metis Menu Plugin JavaScript -->
-    <script src="/template/bower_components/metisMenu/dist/metisMenu.min.js"></script>
+            <button type="submit" class="botao-entrar" data-ocupado="Salvando…">Salvar e entrar</button>
+        </form>
+    </main>
 
-    <!-- Custom Theme JavaScript -->
-    <script src="/template/dist/js/sb-admin-2.js"></script>
+    <p class="entrar-rodape">G2W Tecnologia</p>
 
-    <script src="/template/dist/js/main.js?v=<?php echo time(); ?>"></script>
-
+    <script src="/template/dist/js/entrar.js?v=<?php echo $g2w_v; ?>"></script>
 </body>
-
 </html>
