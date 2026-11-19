@@ -37,6 +37,11 @@ No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada
 - A chave do ao vivo vale por câmera (respeita as câmeras bloqueadas do usuário), deixou de ser o identificador da sessão do painel e é renovada enquanto alguém assiste.
 - Tela "Ao vivo" nova em `/aovivo`, no lugar da `/liveview`: abre com as câmeras permitidas, 1/2/4/6/9 por tela, troca de câmera por quadro.
 
+### Próxima versão (2026-11-19, ainda sem build): tela de entrada nova e ícone v3
+
+- `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
+- Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
+
 ### Painel de gestão (branch `painel-gestao-2026-11`, junto na mesma imagem)
 
 Telas novas em português em `/gestao` (visão geral com a saúde das câmeras, câmeras, usuários com criação e ações em lote, gravações com linha do tempo). O painel original continua disponível como modo avançado em `/monitor`.
