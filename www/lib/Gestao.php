@@ -87,13 +87,23 @@ class G2WGestao
         if (self::$tabelasOk !== null) return self::$tabelasOk;
         try {
             // caminho normal: as duas já existem e nenhum CREATE é executado
-            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 2) return self::$tabelasOk = true;
+            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 3) return self::$tabelasOk = true;
             self::q("CREATE TABLE IF NOT EXISTS G2WPainelAcessos (
                 user_id INT NOT NULL PRIMARY KEY,
                 ultimo_acesso INT NOT NULL,
                 pelo_app TINYINT(1) NOT NULL DEFAULT 0,
                 total INT NOT NULL DEFAULT 0
             ) DEFAULT CHARSET=utf8");
+            // Localização das câmeras (mapa). Tabela própria, e não colunas em
+            // Devices, para não brigar com as migrações do projeto original.
+            // Câmera sem linha aqui = sem localização.
+            self::q("CREATE TABLE IF NOT EXISTS G2WPainelLocais (
+                device_id INT NOT NULL PRIMARY KEY,
+                latitude DECIMAL(8,6) NOT NULL,
+                longitude DECIMAL(9,6) NOT NULL,
+                endereco VARCHAR(200) NOT NULL DEFAULT '',
+                atualizado_em INT NOT NULL
+            ) DEFAULT CHARSET=utf8mb4");
             self::q("CREATE TABLE IF NOT EXISTS G2WPainelMotor (
                 iniciado_em INT NOT NULL PRIMARY KEY,
                 visto_em INT NOT NULL
@@ -259,6 +269,86 @@ class G2WGestao
             );
         }
         return $cams;
+    }
+
+    // ------------------------------------------- localização (mapa)
+
+    const ENDERECO_MAX = 200;
+
+    /* id da câmera => array(latitude, longitude, endereco). Só quem tem
+     * localização cadastrada aparece. Quem chama é que decide para quem
+     * mostrar: localização de câmera é dado sensível (onde ela fica). */
+    public static function locais()
+    {
+        if (!self::garantirTabelas()) return array();
+        $res = array();
+        try {
+            foreach (self::q("SELECT device_id, latitude, longitude, endereco FROM G2WPainelLocais") as $l) {
+                $res[intval($l['device_id'])] = array(
+                    'latitude' => floatval($l['latitude']),
+                    'longitude' => floatval($l['longitude']),
+                    'endereco' => (string)$l['endereco'],
+                );
+            }
+        } catch (Throwable $e) {
+            error_log('G2W gestao: locais: '.$e->getMessage());
+        }
+        return $res;
+    }
+
+    /* Confere e normaliza o que veio de fora. Devolve array(lat, lon) com 6
+     * casas (cerca de 11 cm) ou lança InvalidArgumentException. */
+    public static function coordenada($lat, $lon)
+    {
+        foreach (array($lat, $lon) as $v) {
+            if (is_string($v)) $v = trim($v);
+            if (!(is_int($v) || is_float($v) || (is_string($v) && preg_match('/^-?\d{1,3}(\.\d{1,15})?$/', $v)))) {
+                throw new InvalidArgumentException('Latitude e longitude precisam ser números.');
+            }
+        }
+        $lat = floatval($lat);
+        $lon = floatval($lon);
+        if (!is_finite($lat) || !is_finite($lon) || $lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+            throw new InvalidArgumentException('Posição fora do mapa: a latitude vai de -90 a 90 e a longitude de -180 a 180.');
+        }
+        return array(round($lat, 6), round($lon, 6));
+    }
+
+    /* Texto livre de uma linha. Não leva HTML para lugar nenhum (toda saída é
+     * escapada), então só tira caractere de controle e limita o tamanho. */
+    public static function endereco($texto)
+    {
+        if (!is_string($texto) || !mb_check_encoding($texto, 'UTF-8')) throw new InvalidArgumentException('Endereço inválido.');
+        $texto = trim(preg_replace('/[\x00-\x1f\x7f]+/', ' ', $texto));
+        if (mb_strlen($texto) > self::ENDERECO_MAX) {
+            throw new InvalidArgumentException('O endereço pode ter no máximo '.self::ENDERECO_MAX.' caracteres.');
+        }
+        return $texto;
+    }
+
+    public static function salvarLocal($cameraId, $lat, $lon, $endereco)
+    {
+        if (!self::garantirTabelas()) throw new RuntimeException('tabela de localizacao indisponivel');
+        self::q("INSERT INTO G2WPainelLocais (device_id, latitude, longitude, endereco, atualizado_em) VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE latitude=VALUES(latitude), longitude=VALUES(longitude), endereco=VALUES(endereco), atualizado_em=VALUES(atualizado_em)",
+            'iddsi', array(intval($cameraId), $lat, $lon, $endereco, time()));
+    }
+
+    public static function removerLocal($cameraId)
+    {
+        if (!self::garantirTabelas()) return;
+        self::q("DELETE FROM G2WPainelLocais WHERE device_id=?", 'i', array(intval($cameraId)));
+    }
+
+    /* Câmera excluída no modo avançado não deixa a localização para trás. */
+    public static function limparLocaisOrfaos()
+    {
+        if (!self::garantirTabelas()) return;
+        try {
+            self::q("DELETE l FROM G2WPainelLocais l LEFT JOIN Devices d ON d.id=l.device_id WHERE d.id IS NULL");
+        } catch (Throwable $e) {
+            error_log('G2W gestao: locais orfaos: '.$e->getMessage());
+        }
     }
 
     /* Quanto o servidor grava por dia, pelas últimas 24 h. Com menos de 24 h

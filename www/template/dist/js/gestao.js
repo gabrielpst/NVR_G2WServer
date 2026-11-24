@@ -631,8 +631,208 @@
         carregar();
     }
 
+    // ---------------------------------------------------------------- mapa
+    // Leaflet guardado em vendor/ (nada de CDN). As imagens do mapa vêm do
+    // servidor público do OpenStreetMap; o navegador manda a ele só a origem
+    // desta página (cabeçalho Referer), como a política de uso de lá exige.
+    function criarMapa(alvo) {
+        var m = window.L.map(alvo, { zoomControl: true });
+        m.attributionControl.setPrefix(false);
+        window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            referrerPolicy: 'strict-origin-when-cross-origin',
+            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'
+        }).addTo(m);
+        return m;
+    }
+    var BRASIL = [[-33.8, -73.9], [5.3, -34.8]];
+    function coordTexto(lat, lon) {
+        var f = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+        return f.format(lat) + ' ; ' + f.format(lon);
+    }
+
+    function iniciarLocalizacao() {
+        var bruto = $('#dados-locais');
+        var dlg = $('#dlg-local');
+        if (!bruto || !dlg) return;
+        var cams = JSON.parse(bruto.textContent);
+        var porId = {};
+        cams.forEach(function (c) { porId[c.id] = c; });
+        var form = $('form', dlg);
+        var campo = form.elements.endereco;
+        var lista = $('#loc-resultados'), msg = $('#loc-busca-msg'), coord = $('#loc-coordenada');
+        var botaoBuscar = $('#loc-buscar'), botaoRemover = $('#loc-remover');
+        var mapa = null, marcador = null, atual = null;
+
+        function semMapa() {
+            erroForm(form, 'O mapa não carregou neste navegador. Recarregue a página.');
+        }
+        function marcar(lat, lon, aproximar) {
+            if (!mapa) return;
+            if (!marcador) {
+                marcador = window.L.marker([lat, lon], { draggable: true, keyboard: true, title: 'Posição da câmera (arraste para ajustar)' }).addTo(mapa);
+                marcador.on('dragend', function () { var p = marcador.getLatLng(); mostrarCoord(p.lat, p.lng); });
+            } else {
+                marcador.setLatLng([lat, lon]);
+            }
+            if (aproximar) mapa.setView([lat, lon], Math.max(mapa.getZoom(), 17));
+            mostrarCoord(lat, lon);
+        }
+        function mostrarCoord(lat, lon) { coord.textContent = 'Posição marcada: ' + coordTexto(lat, lon) + '.'; }
+        function desmarcar() {
+            if (marcador) { marcador.remove(); marcador = null; }
+            coord.textContent = 'Nenhum ponto marcado ainda.';
+        }
+
+        function abrirLocal(id) {
+            atual = porId[id];
+            if (!atual) return;
+            form.reset();
+            lista.hidden = true;
+            lista.textContent = '';
+            msg.textContent = '';
+            $('#dlg-local-t').textContent = 'Localização: ' + atual.nome;
+            campo.value = atual.local ? atual.local.endereco : '';
+            botaoRemover.hidden = !atual.local;
+            abrir(dlg);
+            if (!window.L) { semMapa(); return; }
+            if (!mapa) {
+                mapa = criarMapa($('#loc-mapa'));
+                mapa.on('click', function (ev) { marcar(ev.latlng.lat, ev.latlng.lng, false); });
+            }
+            mapa.invalidateSize();
+            desmarcar();
+            if (atual.local) {
+                mapa.setView([atual.local.latitude, atual.local.longitude], 17);
+                marcar(atual.local.latitude, atual.local.longitude, false);
+            } else {
+                // sem posição ainda: começa perto das outras câmeras já marcadas, ou no país
+                var outras = cams.filter(function (c) { return c.local; }).map(function (c) { return [c.local.latitude, c.local.longitude]; });
+                if (outras.length) mapa.fitBounds(window.L.latLngBounds(outras).pad(0.3), { maxZoom: 16 });
+                else mapa.fitBounds(BRASIL);
+            }
+            focoInicial(campo);
+        }
+
+        function buscar() {
+            var q = campo.value.trim();
+            erroForm(form, '');
+            if (q.length < 3) { msg.textContent = 'Escreva pelo menos 3 letras do endereço para buscar.'; campo.focus(); return; }
+            ocupado(botaoBuscar, true, 'Buscando…');
+            msg.textContent = '';
+            lista.hidden = true;
+            lista.textContent = '';
+            fetch('/gestao/buscar-endereco?q=' + encodeURIComponent(q), {
+                credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-G2W-CSRF': csrf }
+            }).then(function (r) {
+                if (r.status === 401) window.location.href = '/login';
+                return r.json();
+            }).then(function (j) {
+                ocupado(botaoBuscar, false);
+                if (!j.ok) { msg.textContent = j.erro; return; }
+                if (!j.resultados.length) { msg.textContent = 'Nenhum lugar encontrado com esse texto. Tente com cidade e bairro, ou marque direto no mapa.'; return; }
+                j.resultados.forEach(function (r) {
+                    var b = el('button', { type: 'button', text: r.nome });
+                    b.addEventListener('click', function () {
+                        marcar(r.latitude, r.longitude, true);
+                        if (mapa) mapa.setView([r.latitude, r.longitude], 17);
+                        lista.hidden = true;
+                        msg.textContent = 'Ponto marcado. Confira no mapa e arraste o marcador se precisar.';
+                    });
+                    lista.appendChild(el('li', {}, [b]));
+                });
+                lista.hidden = false;
+                msg.textContent = j.resultados.length + (j.resultados.length === 1 ? ' lugar encontrado' : ' lugares encontrados') + ' (busca: ' + j.servico + ').';
+                $('button', lista).focus();
+            }).catch(function () {
+                ocupado(botaoBuscar, false);
+                msg.textContent = 'Não foi possível buscar agora. Você pode marcar o ponto direto no mapa.';
+            });
+        }
+        botaoBuscar.addEventListener('click', buscar);
+        campo.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); buscar(); }
+        });
+
+        function refletir(local) {
+            atual.local = local;
+            var linha = $('[data-local-de="' + atual.id + '"]');
+            if (!linha) return;
+            $('[data-local-texto]', linha).textContent = local ? (local.endereco || 'Ponto marcado, sem endereço escrito') : 'Não definida';
+            var b = $('[data-abrir-local]', linha);
+            b.textContent = local ? 'Ajustar' : 'Definir';
+            b.setAttribute('aria-label', (local ? 'Ajustar' : 'Definir') + ' a localização de ' + atual.nome);
+        }
+
+        form.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            if (!atual) return;
+            if (!marcador) { erroForm(form, 'Marque no mapa onde a câmera fica (clique no mapa ou use a busca).'); return; }
+            var p = marcador.getLatLng();
+            var botao = $('button[type="submit"]', form);
+            ocupado(botao, true);
+            enviar('camera-local', { id: atual.id, latitude: p.lat, longitude: p.lng, endereco: campo.value.trim() }).then(function (r) {
+                ocupado(botao, false);
+                if (!r.ok) { erroForm(form, r.erro); return; }
+                refletir(r.local);
+                dlg.close();
+                aviso(atual.nome + ': ' + r.msg);
+            });
+        });
+        botaoRemover.addEventListener('click', function () {
+            if (!atual) return;
+            confirmar('Remover a localização de ' + atual.nome + '? A câmera some do mapa do painel e do aplicativo.', 'Remover').then(function (sim) {
+                if (!sim) return;
+                enviar('camera-local', { id: atual.id, remover: true }).then(function (r) {
+                    if (!r.ok) { erroForm(form, r.erro); return; }
+                    refletir(null);
+                    dlg.close();
+                    aviso(atual.nome + ': ' + r.msg);
+                });
+            });
+        });
+
+        document.addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-abrir-local]');
+            if (b) abrirLocal(parseInt(b.getAttribute('data-abrir-local'), 10));
+        });
+        var m = /local=(\d+)/.exec(window.location.hash);
+        if (m && porId[m[1]]) abrirLocal(parseInt(m[1], 10));
+    }
+
+    function iniciarMapa() {
+        var alvo = $('#mapa-cameras');
+        if (!alvo) return;
+        if (!window.L) { alvo.textContent = 'O mapa não carregou neste navegador. A lista abaixo traz as mesmas câmeras.'; return; }
+        var cams = JSON.parse($('#dados-mapa').textContent);
+        var mapa = criarMapa(alvo);
+        var marcadores = {};
+        cams.forEach(function (c) {
+            // conteúdo montado com textContent: nome e endereço nunca viram HTML
+            var caixa = el('div', {}, [
+                el('strong', { text: c.nome }),
+                el('span', { text: c.estado }),
+                c.endereco ? el('div', { text: c.endereco }) : null,
+                el('a', { href: '/gestao/cameras#local=' + c.id, text: 'Ajustar posição' }),
+                el('a', { href: '/gestao/gravacoes#camera=' + c.id, text: 'Gravações' })
+            ]);
+            marcadores[c.id] = window.L.marker([c.latitude, c.longitude], { title: c.nome, alt: 'Câmera ' + c.nome }).addTo(mapa).bindPopup(caixa);
+        });
+        mapa.fitBounds(window.L.latLngBounds(cams.map(function (c) { return [c.latitude, c.longitude]; })).pad(0.25), { maxZoom: 17 });
+        document.addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-ver-no-mapa]');
+            if (!b) return;
+            var mk = marcadores[b.getAttribute('data-ver-no-mapa')];
+            if (!mk) return;
+            mapa.setView(mk.getLatLng(), Math.max(mapa.getZoom(), 17));
+            mk.openPopup();
+            alvo.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
     if (aba === 'visao') iniciarVisao();
-    if (aba === 'cameras') iniciarCameras();
+    if (aba === 'cameras') { iniciarCameras(); iniciarLocalizacao(); }
+    if (aba === 'mapa') iniciarMapa();
     if (aba === 'usuarios') iniciarUsuarios();
     if (aba === 'gravacoes') iniciarGravacoes();
 })();

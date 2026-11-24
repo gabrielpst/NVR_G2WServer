@@ -5,7 +5,10 @@ $abas = array(
     'cameras' => array('/gestao/cameras', 'Câmeras'),
     'usuarios' => array('/gestao/usuarios', 'Usuários'),
     'gravacoes' => array('/gestao/gravacoes', 'Gravações'),
+    'mapa' => array('/gestao/mapa', 'Mapa'),
 );
+$com_mapa = !empty($com_mapa);
+$leaflet = '/template/dist/js/vendor/leaflet-1.9.4';
 $v_css = @filemtime(SITE_PATH.'template/dist/css/gestao.css');
 $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
 ?>
@@ -20,6 +23,8 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     <meta name="g2w-csrf" content="<?php echo $h($csrf); ?>">
     <link rel="icon" href="/favicon.ico">
     <title><?php echo $h($titulo); ?> · G2W Monitor</title>
+    <?php if ($com_mapa) { ?><link href="<?php echo $leaflet; ?>/leaflet.css" rel="stylesheet"><?php } ?>
+
     <link href="/template/dist/css/gestao.css?v=<?php echo intval($v_css); ?>" rel="stylesheet">
 </head>
 <body data-aba="<?php echo $h($aba); ?>">
@@ -64,6 +69,8 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     </dialog>
 
     <div id="avisos-flutuantes" class="toasts" role="status" aria-live="polite"></div>
+    <?php if ($com_mapa) { ?><script src="<?php echo $leaflet; ?>/leaflet.js" defer></script><?php } ?>
+
     <script src="/template/dist/js/gestao.js?v=<?php echo intval($v_js); ?>" defer></script>
 </body>
 </html>

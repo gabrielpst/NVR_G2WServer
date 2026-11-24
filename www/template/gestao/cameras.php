@@ -59,9 +59,46 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
             <button type="submit" class="botao botao-principal" disabled>Salvar</button>
             <a class="botao botao-leve" href="/gestao/gravacoes#camera=<?php echo $c['id']; ?>">Gravações</a>
         </div>
+        <div class="linha-camera-local" data-local-de="<?php echo $c['id']; ?>">
+            <span class="rotulo">Localização no mapa</span>
+            <span class="local-texto" data-local-texto><?php
+                echo $c['local'] ? $h($c['local']['endereco'] !== '' ? $c['local']['endereco'] : 'Ponto marcado, sem endereço escrito') : 'Não definida'; ?></span>
+            <button type="button" class="botao" data-abrir-local="<?php echo $c['id']; ?>"
+                aria-label="<?php echo $c['local'] ? 'Ajustar' : 'Definir'; ?> a localização de <?php echo $h($c['nome']); ?>"><?php echo $c['local'] ? 'Ajustar' : 'Definir'; ?></button>
+        </div>
     </form>
     <?php } ?>
 </section>
+
+<?php
+$locais_json = array();
+foreach ($cams as $c) $locais_json[] = array('id' => $c['id'], 'nome' => $c['nome'], 'local' => $c['local']);
+?>
+<script type="application/json" id="dados-locais"><?php echo json_encode($locais_json, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
+
+<dialog id="dlg-local" class="dialogo dialogo-mapa" aria-labelledby="dlg-local-t">
+    <form method="dialog" data-form-local autocomplete="off" novalidate>
+        <h2 id="dlg-local-t">Localização da câmera</h2>
+        <div class="busca-endereco">
+            <div class="campo">
+                <label for="loc-endereco">Endereço</label>
+                <input id="loc-endereco" name="endereco" type="text" maxlength="<?php echo G2WGestao::ENDERECO_MAX; ?>" autocomplete="off" placeholder="Ex.: Rua das Flores, 120, Campo Grande…" aria-describedby="loc-endereco-ajuda">
+            </div>
+            <button type="button" class="botao" id="loc-buscar">Buscar no mapa</button>
+        </div>
+        <small id="loc-endereco-ajuda">O endereço aparece para quem pode ver a câmera. Ao buscar, só o texto digitado é enviado ao serviço público de busca do OpenStreetMap (Nominatim).</small>
+        <ul class="busca-resultados" id="loc-resultados" aria-label="Lugares encontrados" hidden></ul>
+        <p class="nota" id="loc-busca-msg" role="status" aria-live="polite"></p>
+        <div class="mapa mapa-dialogo" id="loc-mapa" role="application" aria-label="Mapa: clique para marcar onde a câmera fica; arraste o marcador para ajustar"></div>
+        <p class="nota">Clique no mapa para marcar o ponto, ou arraste o marcador. <span id="loc-coordenada" aria-live="polite"></span></p>
+        <p class="erro-form" role="alert" hidden></p>
+        <div class="dialogo-acoes">
+            <button type="button" class="botao botao-perigo" id="loc-remover" hidden>Remover localização</button>
+            <button type="button" class="botao" data-fechar>Cancelar</button>
+            <button type="submit" class="botao botao-principal">Salvar localização</button>
+        </div>
+    </form>
+</dialog>
 
 <section class="bloco" id="armazenamento" aria-labelledby="t-arm">
     <h2 id="t-arm">Armazenamento</h2>

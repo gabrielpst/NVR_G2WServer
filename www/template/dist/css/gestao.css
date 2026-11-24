@@ -392,3 +392,30 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--verde); 
   .botao, .filtro, .link-topo, .cartao-resumo { transition: background-color .15s, border-color .15s, color .15s; }
   html { scroll-behavior: smooth; }
 }
+
+/* ---------- mapa das câmeras ---------- */
+.mapa { width: 100%; border: 1px solid var(--borda); border-radius: var(--raio); background: #E9EDEA; z-index: 0; }
+.mapa-pagina { height: min(62vh, 620px); min-height: 320px; margin-bottom: 12px; }
+.mapa-dialogo { height: min(46vh, 380px); min-height: 240px; margin-top: 10px; }
+.dialogo-mapa { width: min(760px, calc(100vw - 24px)); }
+.mapa .leaflet-container, .mapa.leaflet-container { font: inherit; }
+.mapa.leaflet-container:focus-visible { box-shadow: var(--foco); }
+.mapa .leaflet-popup-content { margin: 10px 12px; font-size: .875rem; line-height: 1.4; }
+.mapa .leaflet-popup-content strong { display: block; font-size: .9375rem; }
+.mapa .leaflet-popup-content a { display: inline-block; margin-top: 6px; margin-right: 10px; font-weight: 600; }
+.busca-endereco { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.busca-endereco .campo { flex: 1 1 260px; }
+.busca-resultados { margin-top: 8px; display: grid; gap: 4px; max-height: 190px; overflow-y: auto; overscroll-behavior: contain; }
+.busca-resultados button {
+  font: inherit; font-size: .875rem; text-align: left; width: 100%; cursor: pointer; min-height: 44px; padding: 8px 10px;
+  border: 1px solid var(--borda); border-radius: 8px; background: #fff; color: var(--texto); touch-action: manipulation;
+  overflow-wrap: anywhere;
+}
+.busca-resultados button:hover { background: var(--verde-suave); border-color: var(--verde-vivo); }
+.busca-resultados button:focus-visible { box-shadow: var(--foco); }
+.linha-camera-local {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border-top: 1px solid var(--borda); padding-top: 12px;
+}
+.linha-camera-local .local-texto { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+#loc-coordenada { font-variant-numeric: tabular-nums; }

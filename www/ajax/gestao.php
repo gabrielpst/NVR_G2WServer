@@ -45,7 +45,7 @@ class gestao extends Controller
     {
         G2WGestao::aplicarFuso();
         $post = (Inp::method() == 'POST');
-        $this->pedidoApi = $post || in_array($uri->two, array('trechos', 'midia', 'miniatura'), true);
+        $this->pedidoApi = $post || in_array($uri->two, array('trechos', 'midia', 'miniatura', 'buscarEndereco'), true);
 
         // Em chamada de API a recusa é um JSON com 401/403 — não o
         // redirecionamento pra /login que o chAccess() faz nas páginas.
@@ -127,11 +127,28 @@ class gestao extends Controller
 
     public function getCameras()
     {
-        $cams = G2WGestao::cameras();
+        $cams = $this->camerasComLocal();
         return $this->pagina('cameras', 'Câmeras', array(
             'cams' => $cams,
             'discos' => G2WGestao::discos(G2WGestao::bytesPorDia($cams)),
-        ));
+        ), true);
+    }
+
+    /* Aba "Mapa": todas as câmeras com localização (o administrador vê todas). */
+    public function getMapa()
+    {
+        return $this->pagina('mapa', 'Mapa', array('cams' => $this->camerasComLocal()), true);
+    }
+
+    private function camerasComLocal()
+    {
+        G2WGestao::limparLocaisOrfaos();
+        $locais = G2WGestao::locais();
+        $cams = G2WGestao::cameras();
+        foreach ($cams as $k => $c) {
+            $cams[$k]['local'] = isset($locais[$c['id']]) ? $locais[$c['id']] : null;
+        }
+        return $cams;
     }
 
     public function getUsuarios()
@@ -169,13 +186,21 @@ class gestao extends Controller
         return $this->pagina('gravacoes', 'Gravações', array('cams' => $cams, 'hoje' => date('Y-m-d')));
     }
 
-    private function pagina($aba, $titulo, $dados)
+    // imagens do mapa: servidor público do OpenStreetMap (política em
+    // https://operations.osmfoundation.org/policies/tiles/)
+    const MAPA_TILES_ORIGEM = 'https://tile.openstreetmap.org';
+
+    private function pagina($aba, $titulo, $dados, $comMapa = false)
     {
         header('Cache-Control: no-store');
         header('X-Frame-Options: DENY');
         header('X-Content-Type-Options: nosniff');
-        header('Referrer-Policy: same-origin');
-        header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+        // Nas telas com mapa o navegador busca as imagens direto no servidor
+        // de mapas, que exige saber de que site vem o pedido: vai só a origem
+        // (https://endereço:porta), nunca o caminho nem parâmetros. Nas outras
+        // telas nada sai para fora.
+        header('Referrer-Policy: '.($comMapa ? 'strict-origin-when-cross-origin' : 'same-origin'));
+        header("Content-Security-Policy: default-src 'self'; img-src 'self' data:".($comMapa ? ' '.self::MAPA_TILES_ORIGEM : '')."; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
 
         $v = new View('gestao.'.$aba);
         foreach ($dados as $k => $val) $v->$k = $val;
@@ -186,6 +211,7 @@ class gestao extends Controller
         $layout->csrf = G2WGestao::csrfToken();
         $layout->usuario = (string)$this->user->info['username'];
         $layout->agora = time();
+        $layout->com_mapa = $comMapa;
         return $layout->render();
     }
 
@@ -365,6 +391,108 @@ class gestao extends Controller
         $senha = isset($p['pass']) ? rawurldecode($p['pass']) : '';
         if ($usuario !== null && (strlen($usuario) > 256 || strlen($senha) > 256)) $this->falha(422, 'Usuário ou senha da câmera longos demais.');
         return array('device' => $device, 'host' => $p['host'], 'porta' => $porta, 'usuario' => $usuario, 'senha' => $senha);
+    }
+
+    /* Localização da câmera no mapa. {id, latitude, longitude, endereco} grava;
+     * {id, remover: true} apaga. */
+    public function postCameraLocal()
+    {
+        $e = $this->entrada();
+        $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
+        if (!G2WGestao::q("SELECT id FROM Devices WHERE id=?", 'i', array($id))) $this->falha(404, 'Câmera não encontrada.');
+
+        if (!empty($e['remover'])) {
+            G2WGestao::removerLocal($id);
+            $this->json(array('ok' => true, 'msg' => 'Localização removida.', 'local' => null));
+        }
+        try {
+            list($lat, $lon) = G2WGestao::coordenada(isset($e['latitude']) ? $e['latitude'] : null, isset($e['longitude']) ? $e['longitude'] : null);
+            $endereco = G2WGestao::endereco(isset($e['endereco']) ? $e['endereco'] : '');
+        } catch (InvalidArgumentException $ex) {
+            $this->falha(422, $ex->getMessage());
+        }
+        G2WGestao::salvarLocal($id, $lat, $lon, $endereco);
+        $this->json(array('ok' => true, 'msg' => 'Localização salva.',
+            'local' => array('latitude' => $lat, 'longitude' => $lon, 'endereco' => $endereco)));
+    }
+
+    // Busca de endereço: serviço público Nominatim, do OpenStreetMap
+    // (política em https://operations.osmfoundation.org/policies/nominatim/:
+    // no máximo 1 pedido por segundo por aplicação, identificar-se, sem
+    // autocompletar, guardar respostas).
+    const BUSCA_URL = 'https://nominatim.openstreetmap.org/search';
+    const BUSCA_AGENTE = 'G2WMonitor/1.0 (painel de cameras; +https://g2wtecnologia.net)';
+
+    /* GET /gestao/buscar-endereco?q=texto -> até 5 lugares com coordenada.
+     *
+     * Quem fala com o serviço de fora é este servidor, não o navegador: para
+     * lá vão só o texto digitado e o IP do servidor. Não vai usuário, câmera,
+     * cookie nem o endereço do painel. Só roda quando o administrador aperta
+     * "Buscar" (o pedido precisa do token da página). */
+    public function getBuscarEndereco()
+    {
+        if (!G2WGestao::csrfConfere()) $this->falha(403, 'Pedido recusado por segurança. Recarregue a página e tente de novo.');
+        session_write_close();
+
+        $q = (string)filter_input(INPUT_GET, 'q', FILTER_UNSAFE_RAW);
+        try {
+            $q = G2WGestao::endereco($q);
+        } catch (InvalidArgumentException $ex) {
+            $this->falha(422, $ex->getMessage());
+        }
+        if (mb_strlen($q) < 3) $this->falha(422, 'Escreva pelo menos 3 letras do endereço.');
+
+        // mesma busca em menos de um dia: responde do que já está guardado
+        $dir = sys_get_temp_dir();
+        $cache = $dir.'/g2w-gestao-busca-'.sha1(mb_strtolower($q)).'.json';
+        if (is_readable($cache) && (time() - filemtime($cache)) < 86400) {
+            $guardado = json_decode(file_get_contents($cache), true);
+            if (is_array($guardado)) $this->json(array('ok' => true, 'resultados' => $guardado, 'servico' => 'Nominatim (OpenStreetMap)'));
+        }
+
+        // um pedido por segundo para a instalação inteira, não por administrador
+        $trava = fopen($dir.'/g2w-gestao-busca.trava', 'c+');
+        if (!$trava || !flock($trava, LOCK_EX)) $this->falha(503, 'A busca está ocupada. Tente de novo em instantes.');
+        $ultima = floatval(stream_get_contents($trava));
+        $espera = 1.1 - (microtime(true) - $ultima);
+        if ($espera > 0 && $espera <= 1.1) usleep(intval($espera * 1000000));
+
+        $url = self::BUSCA_URL.'?'.http_build_query(array(
+            'format' => 'jsonv2', 'limit' => 5, 'countrycodes' => 'br', 'accept-language' => 'pt-BR', 'q' => $q,
+        ));
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_USERAGENT => self::BUSCA_AGENTE, CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_HTTPHEADER => array('Accept: application/json'),
+        ));
+        $corpo = curl_exec($ch);
+        $codigo = intval(curl_getinfo($ch, CURLINFO_HTTP_CODE));
+        curl_close($ch);
+        ftruncate($trava, 0);
+        rewind($trava);
+        fwrite($trava, sprintf('%.3f', microtime(true)));
+        flock($trava, LOCK_UN);
+        fclose($trava);
+
+        $lista = ($corpo !== false && $codigo === 200) ? json_decode($corpo, true) : null;
+        if (!is_array($lista)) {
+            error_log('G2W gestao: busca de endereco falhou (http '.$codigo.')');
+            $this->falha(502, 'O serviço de busca de endereço não respondeu. Você pode marcar o ponto direto no mapa.');
+        }
+        $resultados = array();
+        foreach ($lista as $item) {
+            if (!is_array($item) || !isset($item['lat'], $item['lon'], $item['display_name'])) continue;
+            try {
+                list($lat, $lon) = G2WGestao::coordenada($item['lat'], $item['lon']);
+            } catch (InvalidArgumentException $ex) {
+                continue;
+            }
+            $resultados[] = array('nome' => mb_substr(trim(preg_replace('/[\x00-\x1f\x7f]+/', ' ', (string)$item['display_name'])), 0, 300),
+                'latitude' => $lat, 'longitude' => $lon);
+        }
+        @file_put_contents($cache, json_encode($resultados), LOCK_EX);
+        $this->json(array('ok' => true, 'resultados' => $resultados, 'servico' => 'Nominatim (OpenStreetMap)'));
     }
 
     public function postArmazenamento()
