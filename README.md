@@ -42,6 +42,14 @@ No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Baixar trecho de gravação por horário (branch `trecho-2026-11`, 2026-11-24, ainda sem build)
+
+- **`GET /media/trecho?id=<câmera>&inicio=<epoch>&fim=<epoch>`**: junta, sem recodificar, os arquivos gravados (~5 min cada) que cobrem a janela e devolve um MP4 só, de até 20 minutos. É a rota que o aplicativo usa para "baixar das 13h03 às 13h21". Contrato em [`docs/api-trecho-gravacao.md`](docs/api-trecho-gravacao.md).
+- **Quem pode**: usuário não desativado, com direito de ver gravações, e só de câmera liberada para ele; conferido no servidor. Cookie de sessão ou Basic.
+- **Limites para não pesar no servidor**: um pedido por usuário, 2 downloads ao mesmo tempo no servidor todo, 45 s para montar, conferência de espaço livre; temporário em `/tmp/g2w-trecho/`, apagado no fim, em erro e na desistência.
+- **O que não faz**: não inclui o arquivo ainda em gravação (os ~5 min mais recentes), não retoma download interrompido, e emenda por cima de buraco de gravação (avisa em cabeçalho).
+- **Pendente na rota antiga `/media/request`** (não alterada aqui): ela não confere o direito de ver gravações nem se o usuário foi desativado quando a autenticação é por Basic.
+
 ### Mapa de câmeras (branch `mapa-2026-11`, 2026-11-23, ainda sem build)
 
 - **Localização por câmera** (latitude, longitude, endereço) numa tabela própria, `G2WPainelLocais`, criada sozinha no primeiro uso. Instalação existente não precisa de migração manual; câmera sem linha na tabela é câmera sem localização.
