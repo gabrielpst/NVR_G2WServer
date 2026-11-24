@@ -152,7 +152,10 @@ class mediaTrecho extends Controller
         @chmod($lista, 0600);
 
         // --- montagem --------------------------------------------------------
-        $cmd = array('nice', '-n', '10', 'ionice', '-c', '3', self::FFMPEG,
+        // "timeout" é a rede de segurança: se este processo do PHP morrer sem
+        // limpar (SIGKILL, falta de memória), o ffmpeg não fica rodando sozinho.
+        $cmd = array('nice', '-n', '10', 'ionice', '-c', '3',
+            'timeout', '-k', '2', (string)(self::TEMPO_MONTAGEM + 5), self::FFMPEG,
             '-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
             '-f', 'concat', '-safe', '0', '-i', $lista,
             '-map', '0:v:0', '-map', '0:a?', '-c', 'copy',
@@ -277,9 +280,17 @@ class mediaTrecho extends Controller
     private function matar()
     {
         if (!is_resource($this->processo)) return;
-        // o processo é "nice", que troca de imagem para ionice e depois para o
-        // ffmpeg sem criar filho: o sinal chega no ffmpeg
-        @proc_terminate($this->processo, 9);
+        // O processo é "nice", que vira "ionice" e depois "timeout" sem criar
+        // filho; o ffmpeg é filho do timeout. SIGTERM o timeout repassa ao
+        // ffmpeg (e mata de vez 2 s depois); SIGKILL direto deixaria o ffmpeg
+        // órfão, por isso só vem depois.
+        @proc_terminate($this->processo, 15);
+        for ($i = 0; $i < 30; $i++) {
+            $st = @proc_get_status($this->processo);
+            if (!$st || !$st['running']) break;
+            usleep(100000);
+        }
+        if (!empty($st['running'])) @proc_terminate($this->processo, 9);
         @proc_close($this->processo);
         $this->processo = null;
     }
