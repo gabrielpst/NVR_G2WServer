@@ -818,7 +818,25 @@
             ]);
             marcadores[c.id] = window.L.marker([c.latitude, c.longitude], { title: c.nome, alt: 'Câmera ' + c.nome }).addTo(mapa).bindPopup(caixa);
         });
-        mapa.fitBounds(window.L.latLngBounds(cams.map(function (c) { return [c.latitude, c.longitude]; })).pad(0.25), { maxZoom: 17 });
+        // O enquadramento depende do tamanho do mapa na tela. Se o Leaflet medir
+        // antes de a página terminar de se arrumar, mede zero e abre no mundo
+        // inteiro; por isso mede de novo quando o tamanho de fato aparece.
+        var limites = window.L.latLngBounds(cams.map(function (c) { return [c.latitude, c.longitude]; })).pad(0.25);
+        var enquadrado = false;
+        function enquadrar() {
+            mapa.invalidateSize();
+            var t = mapa.getSize();
+            if (t.x < 50 || t.y < 50) return;
+            mapa.fitBounds(limites, { maxZoom: 17, animate: false });
+            enquadrado = true;
+        }
+        mapa.setView(limites.getCenter(), 15, { animate: false });
+        enquadrar();
+        if (!enquadrado && window.ResizeObserver) {
+            var olho = new ResizeObserver(function () { if (!enquadrado) enquadrar(); if (enquadrado) olho.disconnect(); });
+            olho.observe(alvo);
+        }
+        window.addEventListener('load', function () { if (!enquadrado) enquadrar(); });
         document.addEventListener('click', function (ev) {
             var b = ev.target.closest('[data-ver-no-mapa]');
             if (!b) return;

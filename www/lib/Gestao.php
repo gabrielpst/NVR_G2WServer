@@ -320,6 +320,10 @@ class G2WGestao
     {
         if (!is_string($texto) || !mb_check_encoding($texto, 'UTF-8')) throw new InvalidArgumentException('Endereço inválido.');
         $texto = trim(preg_replace('/[\x00-\x1f\x7f]+/', ' ', $texto));
+        // a conexão com o banco é utf8 de 3 bytes: emoji e afins dariam erro ao gravar
+        if (preg_match('/[\x{10000}-\x{10FFFF}]/u', $texto)) {
+            throw new InvalidArgumentException('O endereço tem um símbolo que não é aceito (emoji, por exemplo).');
+        }
         if (mb_strlen($texto) > self::ENDERECO_MAX) {
             throw new InvalidArgumentException('O endereço pode ter no máximo '.self::ENDERECO_MAX.' caracteres.');
         }

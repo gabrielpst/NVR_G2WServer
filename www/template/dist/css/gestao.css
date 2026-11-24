@@ -385,7 +385,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--verde); 
 }
 @media (max-width: 420px) {
   .resumo { grid-template-columns: 1fr; }
-  .abas a { padding: 13px 10px; font-size: .875rem; }
+  .abas a { padding: 13px 8px; font-size: .8125rem; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

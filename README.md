@@ -42,6 +42,16 @@ No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Mapa de câmeras (branch `mapa-2026-11`, 2026-11-23, ainda sem build)
+
+- **Localização por câmera** (latitude, longitude, endereço) numa tabela própria, `G2WPainelLocais`, criada sozinha no primeiro uso. Instalação existente não precisa de migração manual; câmera sem linha na tabela é câmera sem localização.
+- **`GET /mapa/cameras`**: devolve só as câmeras que o usuário logado pode ver, com id, nome, coordenada e endereço. É a rota que o aplicativo consome. Contrato em [`docs/api-mapa-cameras.md`](docs/api-mapa-cameras.md).
+- **Painel `/gestao`**: em "Câmeras", cada câmera ganhou "Localização no mapa" (endereço com busca, clique no mapa ou marcador arrastável); aba nova "Mapa" com todas as câmeras localizadas.
+- **Serviços de fora usados pelas telas de mapa** (e só por elas):
+  - imagens do mapa: `tile.openstreetmap.org`, pedidas pelo navegador do administrador. Vai para lá o IP dele e a origem da página (`Referer` só com esquema, endereço e porta).
+  - busca de endereço: Nominatim (`nominatim.openstreetmap.org`), pedida **pelo servidor** quando o administrador aperta "Buscar no mapa". Vai para lá só o texto digitado e o IP do servidor. No máximo 1 pedido por segundo por instalação; a resposta fica guardada por um dia.
+- Leaflet 1.9.4 (BSD-2-Clause) servido pelo próprio servidor, em `www/template/dist/js/vendor/leaflet-1.9.4/`. Sem CDN.
+
 ### Painel de gestão (branch `painel-gestao-2026-11`, junto na mesma imagem)
 
 Telas novas em português em `/gestao` (visão geral com a saúde das câmeras, câmeras, usuários com criação e ações em lote, gravações com linha do tempo). O painel original continua disponível como modo avançado em `/monitor`.
