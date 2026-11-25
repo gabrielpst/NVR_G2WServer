@@ -195,7 +195,10 @@ a.cartao-resumo:hover { border-color: var(--verde-vivo); color: inherit; }
 .camera { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 .camera-erro { border-color: #E3A7A1; }
 .camera-imagem, .linha-camera-imagem { position: relative; background: #0d1512; aspect-ratio: 16 / 9; }
-.camera-imagem img, .linha-camera-imagem img { width: 100%; height: 100%; object-fit: cover; }
+/* moldura 16:9 igual para toda câmera; a imagem aparece inteira (contain), com
+   faixa escura quando a proporção é outra (câmera em pé). Pedido do Gabriel, 2026-11-25. */
+.camera-imagem { overflow: hidden; }
+.camera-imagem img, .linha-camera-imagem img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .sem-imagem { position: absolute; inset: 0; display: grid; place-items: center; color: #9FB5A8; font-size: .9375rem; }
 .selo-imagem {
   position: absolute; left: 8px; bottom: 8px; background: rgba(0, 0, 0, .72); color: #fff;
