@@ -6,6 +6,18 @@ class playback extends Controller {
     {
         parent::__construct();
         $this->left_menu = false;
+        // G2W 2026-11: quem não é administrador usa a tela nova de gravações.
+        // Antes do chAccess, para que o usuário sem a permissão "Gravações"
+        // também chegue lá e leia a explicação. As demais ações desta rota
+        // (download por id) seguem com a conferência de sempre.
+        if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_SESSION['id'])
+            && preg_match('#^/(ajax/)?playback(\.php)?/?$#', (string)parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH))) {
+            $quem = new user('id', $_SESSION['id']);
+            if (!empty($quem->info['id']) && !intval($quem->info['access_setup'])) {
+                header('Location: /gravacoes');
+                exit;
+            }
+        }
         $this->chAccess('backup');
     }
 

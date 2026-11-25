@@ -25,7 +25,7 @@ $v = function ($arq) { return intval(@filemtime(SITE_PATH.$arq)); };
             </a>
             <div class="topo-acoes">
                 <?php if ($admin) { ?><a class="link-topo" href="/gestao">Painel</a><?php } ?>
-                <?php if ($gravacoes) { ?><a class="link-topo" href="<?php echo $admin ? '/gestao/gravacoes' : '/playback'; ?>">Gravações</a><?php } ?>
+                <?php if ($gravacoes) { ?><a class="link-topo" href="<?php echo $admin ? '/gestao/gravacoes' : '/gravacoes'; ?>">Gravações</a><?php } ?>
                 <span class="quem" title="Usuário conectado"><?php echo $h($usuario); ?></span>
                 <a class="link-topo" href="/logout">Sair</a>
             </div>

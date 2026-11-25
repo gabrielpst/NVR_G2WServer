@@ -1,0 +1,95 @@
+/* G2W Monitor — tela "Gravações" (/gravacoes). Complementa o gestao.css (mesma paleta e botões). */
+
+.gravacoes { max-width: 1200px; }
+.gv-sem-acesso p + p { margin-top: 10px; }
+
+/* ---------- lista de câmeras ---------- */
+.gv-cameras { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); margin-top: 12px; }
+.gv-cartao {
+  background: var(--cartao); border: 1px solid var(--borda); border-radius: var(--raio); overflow: hidden;
+  display: flex; flex-direction: column; min-width: 0;
+}
+.gv-foto { aspect-ratio: 16 / 9; background: #0d1512; position: relative; }
+.gv-foto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gv-foto span { position: absolute; inset: 0; display: grid; place-items: center; color: #C9D8CF; font-size: .875rem; }
+.gv-cartao-corpo { padding: 12px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.gv-cartao h2 { font-size: 1.0625rem; overflow-wrap: anywhere; }
+.gv-cartao .botao { align-self: flex-start; margin-top: auto; }
+
+/* ---------- câmera ---------- */
+.gv-cabeca { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.gv-cabeca .titulo-pagina { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.gv-palco {
+  position: relative; background: #0d1512; border-radius: var(--raio); overflow: hidden;
+  aspect-ratio: 16 / 9; max-height: calc(100dvh - 330px); min-height: 180px; margin: 0 auto; width: 100%;
+}
+.gv-palco video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #0d1512; }
+.gv-palco:fullscreen { max-height: none; border-radius: 0; }
+.gv-aviso {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 2; margin: 0; padding: 10px 14px;
+  background: rgba(10, 31, 26, .9); color: #fff; border-radius: 8px; font-size: .9375rem; overflow-wrap: anywhere;
+}
+.gv-barra { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin: 12px 0; }
+.gv-relogio { font-variant-numeric: tabular-nums; color: var(--texto-2); min-width: 0; }
+.gv-relogio strong { color: var(--texto); font-size: 1.375rem; margin-left: 6px; white-space: nowrap; }
+.gv-controles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gv-controles .botao { min-height: 44px; }
+#gv-tocar { min-width: 96px; }
+.gv-select {
+  width: auto; flex: none; min-height: 44px; padding: 8px 10px; font: inherit; color: var(--texto); background: #fff;
+  border: 1px solid var(--borda); border-radius: 8px;
+}
+.gv-select:focus-visible { outline: none; box-shadow: var(--foco); }
+#gv-som[aria-pressed="true"] { background: var(--verde-suave); border-color: var(--verde-vivo); }
+
+.gv-ir { display: flex; gap: 12px 20px; flex-wrap: wrap; align-items: flex-end; }
+.gv-ir .dia-nav { display: flex; gap: 6px; align-items: center; }
+.gv-ir input[type="date"], .gv-ir input[type="time"], .gv-baixar input[type="time"] {
+  min-height: 44px; padding: 8px 10px; font: inherit; color: var(--texto); background: #fff;
+  border: 1px solid var(--borda); border-radius: 8px; min-width: 0;
+}
+.gv-ir input:focus-visible, .gv-baixar input:focus-visible { outline: none; box-shadow: var(--foco); }
+.gv-rotulo { font-weight: 600; font-size: .9375rem; }
+.gv-zoom { display: flex; gap: 6px; flex-wrap: wrap; }
+.gv-resumo { margin: 14px 0 8px; color: var(--texto-2); }
+
+.gv-linha-caixa { display: flex; align-items: stretch; gap: 6px; }
+.gv-mover { padding: 0 12px; font-size: 1.25rem; line-height: 1; flex: none; }
+.gv-linha {
+  position: relative; flex: 1; min-width: 0; height: 64px; border-radius: 8px; overflow: hidden; cursor: pointer;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  background: repeating-linear-gradient(135deg, #E9EDEA 0 6px, #DDE3DF 6px 12px);
+}
+.gv-linha:focus-visible { outline: none; box-shadow: var(--foco); }
+.gv-faixas, .gv-faixas i { position: absolute; top: 0; bottom: 0; }
+.gv-faixas { left: 0; right: 0; }
+.gv-faixas i { background: var(--verde-vivo); min-width: 1px; }
+.gv-faixas i.aberto { background: repeating-linear-gradient(90deg, var(--verde-vivo) 0 4px, #9CC79A 4px 8px); }
+.gv-selecao { position: absolute; top: 0; bottom: 0; background: rgba(27, 111, 208, .38); border-left: 2px solid #1B6FD0; border-right: 2px solid #1B6FD0; pointer-events: none; }
+.gv-cursor { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: #B3261E; box-shadow: 0 0 0 1px #fff; pointer-events: none; }
+.gv-escala { display: flex; justify-content: space-between; font-size: .75rem; color: var(--texto-2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.gv-linha-caixa:has(.gv-mover:not([hidden])) + .gv-escala { padding: 0 44px; }
+.gv-amostra-selecao { background: rgba(27, 111, 208, .38); border: 1px solid #1B6FD0; }
+.gv-legenda { gap: 4px 14px; }
+.gv-legenda > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.gv-legenda .amostra-vazio { margin-left: 0; }
+
+/* ---------- baixar trecho ---------- */
+.gv-baixar { margin-top: 12px; }
+.gv-baixar-intro { margin-top: 0; }
+.gv-baixar-campos { display: flex; gap: 12px 20px; flex-wrap: wrap; margin-top: 10px; }
+.gv-baixar-campos .campo { align-items: flex-start; }
+.gv-trecho-info { margin-top: 10px; font-variant-numeric: tabular-nums; }
+.gv-progresso { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.gv-progresso progress { flex: 1 1 200px; height: 12px; accent-color: var(--verde); }
+.gv-baixar-acoes { margin-top: 12px; }
+
+@media (max-width: 640px) {
+  .gv-palco { max-height: none; border-radius: 8px; }
+  .gv-relogio strong { font-size: 1.25rem; }
+  .gv-barra { flex-direction: column; align-items: stretch; }
+  .gv-controles { justify-content: space-between; }
+  .gv-controles .botao, .gv-select { padding-left: 10px; padding-right: 10px; }
+  .gv-linha { height: 72px; }
+}
+.gv-ir .dia-nav button[type="submit"] { font-size: .9375rem; line-height: inherit; padding: 8px 16px; }

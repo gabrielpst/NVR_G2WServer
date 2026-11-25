@@ -644,6 +644,63 @@ class G2WGestao
         return array('inicio_dia' => $t0, 'fim_dia' => $t1, 'trechos' => $res);
     }
 
+    /* Caminho real do arquivo de uma gravação, ou false. O caminho vem do
+     * banco; mesmo assim só vale se estiver dentro de uma pasta de gravação
+     * cadastrada e existir. */
+    public static function arquivoDeGravacao($caminho)
+    {
+        $real = realpath((string)$caminho);
+        if ($real === false || !is_file($real) || !is_readable($real)) return false;
+        foreach (self::q("SELECT path FROM Storage") as $s) {
+            $base = realpath((string)$s['path']);
+            if ($base && $base !== '/' && strpos($real, rtrim($base, '/').'/') === 0) return $real;
+        }
+        return false;
+    }
+
+    /* Entrega um arquivo de vídeo com suporte a Range (o tocador do navegador
+     * pede pedaços para pular no tempo) e encerra o pedido. */
+    public static function enviarVideo($real, $nomeParaBaixar = null)
+    {
+        session_write_close();
+        while (ob_get_level()) ob_end_clean();
+        $tam = filesize($real);
+        $ini = 0;
+        $fim = $tam - 1;
+        if (isset($_SERVER['HTTP_RANGE']) && preg_match('/^bytes=(\d*)-(\d*)$/', trim($_SERVER['HTTP_RANGE']), $m) && ($m[1] !== '' || $m[2] !== '')) {
+            if ($m[1] === '') { $ini = max(0, $tam - intval($m[2])); }
+            else { $ini = intval($m[1]); if ($m[2] !== '') $fim = min($fim, intval($m[2])); }
+            if ($ini > $fim || $ini >= $tam) {
+                http_response_code(416);
+                header('Content-Range: bytes */'.$tam);
+                die();
+            }
+            http_response_code(206);
+            header('Content-Range: bytes '.$ini.'-'.$fim.'/'.$tam);
+        }
+        $ext = strtolower(pathinfo($real, PATHINFO_EXTENSION));
+        header('Content-Type: '.($ext === 'mkv' ? 'video/x-matroska' : 'video/mp4'));
+        header('Accept-Ranges: bytes');
+        header('Content-Length: '.($fim - $ini + 1));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        if ($nomeParaBaixar !== null) header('Content-Disposition: attachment; filename="'.$nomeParaBaixar.'"');
+        $fp = fopen($real, 'rb');
+        if (!$fp) die();
+        fseek($fp, $ini);
+        $resta = $fim - $ini + 1;
+        while ($resta > 0 && !feof($fp) && !connection_aborted()) {
+            set_time_limit(60);
+            $bloco = fread($fp, min(262144, $resta));
+            if ($bloco === false) break;
+            echo $bloco;
+            flush();
+            $resta -= strlen($bloco);
+        }
+        fclose($fp);
+        die();
+    }
+
     // --------------------------------------------------------- utilitários
 
     public static function duracao($seg)

@@ -42,6 +42,17 @@ No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Tela "Gravações" para quem assiste: `/gravacoes` (branch `acesso-gravacoes-2026-11`, 2026-11-24, ainda sem build)
+
+Substitui a `/playback` antiga para o usuário comum (`/playback` leva a ela; o administrador continua com as telas dele). Mesmo visual do `/aovivo`.
+
+- **Lista** das câmeras liberadas ao usuário, com a foto mais recente e "Ver gravações".
+- **Por câmera**: vídeo grande, data e hora do ponto atual (hora do servidor), tocar e pausar, voltar e avançar 10 s, velocidade (0,5× a 8×), som (começa desligado), tela cheia; escolha do dia, "ir para a hora" e linha do tempo do dia com as faixas gravadas (dia inteiro, 6 h ou 1 h), por clique, arrasto ou teclado. Os arquivos de ~5 min são emendados sozinhos; onde não há gravação, pula para a próxima e avisa.
+- **Baixar trecho**: marca início e fim (até 20 min) e baixa um arquivo só pela rota `/media/trecho`, com andamento e com as mensagens do contrato (sem gravação, últimos 5 minutos, um pedido por vez, servidor ocupado, demora).
+- **Permissão conferida no servidor** em tudo: "Gravações" no cadastro do usuário (ou administrador) e câmera liberada. Sem a permissão, o link some do `/aovivo` e a tela explica o motivo.
+- Rotas: `GET /gravacoes` (tela), `GET /gravacoes/dia?camera=&dia=` (JSON com os trechos do dia), `GET /gravacoes/midia?id=` (arquivo do trecho para o tocador, com `Range`).
+- **Limite conhecido**: gravação em H.265 não toca em todo navegador; a tela avisa e oferece baixar o trecho.
+
 ### Painel antigo fechado para quem não é administrador (branch `acesso-gravacoes-2026-11`, 2026-11-24, ainda sem build)
 
 Um usuário comum (sem "administrador") abria `/monitor` com o menu inteiro do painel antigo. As telas de administração em si já recusavam; o que estava aberto, e foi fechado no servidor, rota por rota:
