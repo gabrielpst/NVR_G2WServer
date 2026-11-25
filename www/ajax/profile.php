@@ -6,7 +6,8 @@ class profile extends Controller {
     {
         parent::__construct();
         $this->left_menu = false;
-        $this->chAccess('viewer');
+        // G2W 2026-11: só administrador. É tela do painel antigo; usuário comum troca a senha em /changepwd.
+        $this->chAccess('admin');
     }
 
     public function getData()

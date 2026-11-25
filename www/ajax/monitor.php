@@ -5,7 +5,8 @@ class monitor extends Controller {
     public function __construct()
     {
         parent::__construct();
-        $this->chAccess('viewer'); // Allow any authenticated user to view monitoring
+        // G2W 2026-11: só administrador. Usuário comum abria esta tela do painel antigo.
+        $this->chAccess('admin');
     }
 
     public function getData()

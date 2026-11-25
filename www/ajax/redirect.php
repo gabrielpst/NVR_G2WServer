@@ -4,7 +4,8 @@ class redirect extends Controller {
 	
     public function __construct(){
         parent::__construct();
-		$this->chAccess('basic');
+		// G2W 2026-11: só administrador. Revelava o endereço da câmera a qualquer usuário, sem conferir a câmera.
+		$this->chAccess('admin');
     }
 
     public function getData()

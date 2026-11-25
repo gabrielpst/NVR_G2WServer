@@ -8,6 +8,30 @@ class devices extends Controller {
     public function __construct(){
         parent::__construct();
 		$this->chAccess('devices');
+        // G2W 2026-11: o tipo 'devices' deixa passar qualquer usuário logado
+        // (o aplicativo lê a lista de câmeras por aqui, em XML). Quem não é
+        // administrador só pode isso: ler a lista em XML ou JSON, e com os
+        // campos reduzidos (ver camposDoUsuario). A tela e toda alteração
+        // ficam para o administrador.
+        $this->admin = (bool)intval($this->user->info['access_setup']);
+        if (!$this->admin) {
+            $leitura = ($_SERVER['REQUEST_METHOD'] === 'GET') && ($this->reqXML() || $this->reqJSON());
+            if (!$leitura) {
+                if ($_SERVER['REQUEST_METHOD'] === 'GET') { header('Location: /aovivo'); exit; }
+                http_response_code(403);
+                header('Content-Type: application/json; charset=utf-8');
+                die(json_encode(array('ok' => false, 'erro' => 'Só o administrador pode alterar câmeras.'), JSON_UNESCAPED_UNICODE));
+            }
+        }
+    }
+
+    private $admin = false;
+
+    /* O que a lista de câmeras entrega a quem não é administrador: o que o
+     * aplicativo usa e nada de endereço, caminho ou ajuste da câmera. */
+    private function camposDoUsuario($prop)
+    {
+        return in_array($prop, array('id', 'device_name', 'protocol', 'resolutionX', 'resolutionY', 'status', 'disabled'), true);
     }
 
     public function getData()
@@ -138,6 +162,7 @@ public function MakeXML() {
 
             if (in_array($prop, $block_props) || is_array($prop) || is_array($val))
                 continue;
+            if (!$this->admin && !$this->camposDoUsuario($prop)) continue;
             $xml .= "    <$prop>".htmlspecialchars($val)."</$prop>\n";
         }
 
@@ -191,6 +216,7 @@ public function MakeJSON() {
 
             if (in_array($prop, $block_props) || is_array($prop) || is_array($val))
                 continue;
+            if (!$this->admin && !$this->camposDoUsuario($prop)) continue;
 
             $device_data[$prop] = $val;
         }

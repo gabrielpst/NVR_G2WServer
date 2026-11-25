@@ -5,7 +5,8 @@ class downloadlogs extends Controller {
     public function __construct()
     {
         parent::__construct();
-		$this->chAccess('devices');
+		// G2W 2026-11: só administrador. O tipo 'devices' deixava qualquer usuário baixar os logs do servidor.
+		$this->chAccess('admin');
     }
 
     public function getData()

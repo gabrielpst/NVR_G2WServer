@@ -4,7 +4,9 @@ class layouts extends Controller {
 
     public function __construct(){
         parent::__construct();
-        $this->chAccess('viewer');
+        // G2W 2026-11: só administrador. Só a /liveview antiga usava (hoje leva a /aovivo), e as
+        // consultas daqui montam SQL com texto do pedido.
+        $this->chAccess('admin');
     }
 
     public function postData()

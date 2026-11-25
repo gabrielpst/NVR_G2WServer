@@ -19,7 +19,13 @@ class mediaIndex extends Controller {
         $events = $db->fetchAll("SELECT * FROM Media ORDER BY start DESC");
 
         # Output one item for each media entry
+        // G2W 2026-11: só as câmeras liberadas ao usuário (antes listava as
+        // gravações de todas), e o caminho do arquivo no servidor só para o
+        // administrador.
+        $admin = (bool)intval($this->user->info['access_setup']);
         foreach ($events as $item) {
+            if (!$this->user->camPermission($item['device_id'])) continue;
+            if (!$admin) unset($item['filepath']);
         	print "  <item id='". $item['id'] ."'>\n";
 
         	foreach (array_keys($item) as $key) {

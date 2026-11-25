@@ -42,6 +42,21 @@ No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Painel antigo fechado para quem não é administrador (branch `acesso-gravacoes-2026-11`, 2026-11-24, ainda sem build)
+
+Um usuário comum (sem "administrador") abria `/monitor` com o menu inteiro do painel antigo. As telas de administração em si já recusavam; o que estava aberto, e foi fechado no servidor, rota por rota:
+
+- `/monitor`, `/profile`, `/devices` (tela): agora só administrador; o usuário comum é levado a `/aovivo`.
+- `/downloadlogs`: entregava os logs do servidor a qualquer usuário logado. Só administrador.
+- `/devices?XML=1` e `?JSON=1` (a lista de câmeras que o aplicativo lê): continuam para todos, só com as câmeras liberadas, mas para quem não é administrador saem apenas `id`, `device_name`, `protocol`, `resolutionX`, `resolutionY`, `disabled`, `status` e `oldest_recording`. Antes iam também o endereço e o caminho da câmera e todos os ajustes.
+- `POST /devices/...`: qualquer usuário logado renomeava câmera. Só administrador (403).
+- `/media/index`: listava as gravações de todas as câmeras, com o caminho no disco. Agora só das câmeras liberadas, e sem o caminho para quem não é administrador.
+- `/redirect?id=`: revelava o endereço de qualquer câmera. Só administrador.
+- `/layouts`: só a `/liveview` antiga usava, e monta SQL com texto do pedido. Só administrador.
+- `/media/trigger`: confere a câmera liberada e limpa o texto.
+
+O que o aplicativo usa não mudou: `loginapp.php`, `/devices.php?XML=1` (campos que ele lê preservados), `/events/`, `/media/request.php`, `/media/hls`, `/media/trecho`, `/mapa/cameras`.
+
 ### Marca por instalação (branch `marca-2026-11`, 2026-11-24, ainda sem build)
 
 Cada cliente roda a mesma imagem na sua LXC; o nome mostrado nas telas pode ser trocado por instalação, sem imagem própria.
