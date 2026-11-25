@@ -102,3 +102,9 @@ h1, p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .botao-entrar { transition: none; }
 }
+
+/* "um aparelho por vez": motivo de ter voltado para a entrada */
+.aviso-entrada {
+  margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; font-size: .9375rem; line-height: 1.4;
+  background: #FFF3D6; color: #5C3D00; border: 1px solid #E8C877;
+}

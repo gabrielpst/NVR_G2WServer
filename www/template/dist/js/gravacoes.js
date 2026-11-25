@@ -131,6 +131,7 @@
     function pedir(url, opcoes) {
         return fetch(url, Object.assign({ credentials: 'same-origin', redirect: 'manual', headers: { Accept: 'application/json' } }, opcoes || {}))
             .then(function (r) {
+                if (r.headers && r.headers.get('X-G2W-Sessao') === 'substituida') { window.location.href = '/login?motivo=outro-aparelho'; throw new Error('sessao'); }
                 if (r.type === 'opaqueredirect' || r.status === 401) { sessaoTerminou(); throw new Error('sessao'); }
                 return r;
             });

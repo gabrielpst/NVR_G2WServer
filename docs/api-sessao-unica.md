@@ -66,7 +66,7 @@ Content-Type: application/json; charset=utf-8
 
 - É sempre 401 com o cabeçalho `X-G2W-Sessao: substituida`. Não é o `302` para `/login` da sessão expirada nem o `401` com `WWW-Authenticate` da falta de credencial: dá para distinguir só pelo cabeçalho.
 - A sessão do aparelho desligado é encerrada no servidor nesse pedido.
-- O vídeo ao vivo que estava tocando para: o endereço com `?authtoken=` deixa de ser aceito (resposta do próprio servidor de vídeo, sem o corpo acima). Ao pedir um endereço novo em `/media/hls`, vem o 401 acima.
+- O vídeo ao vivo que estava tocando para em até 15 segundos: o endereço com `?authtoken=` deixa de ser aceito (401 do próprio servidor de vídeo, sem o corpo acima). Ao pedir um endereço novo em `/media/hls`, vem o 401 acima.
 - **O aplicativo deve:** parar os pedidos, mostrar "Sua conta foi acessada em outro aparelho" e voltar para a tela de entrada. **Não refazer o login sozinho**: um login novo toma a vez de volta e desliga o outro aparelho; dois aparelhos fazendo isso se derrubam sem parar. O login novo só acontece quando a pessoa toca em entrar.
 - No site, a página vai para `/login?motivo=outro-aparelho` e mostra a mesma frase.
 
@@ -103,8 +103,8 @@ Aplicativo publicado até a 1.1.2, o desktop e qualquer cliente antigo continuam
 - Chave em `/gestao/usuarios`, "Um aparelho por vez". `POST /gestao/sessao-unica` com `{"ligado": true|false}` (só administrador, com o token CSRF do painel).
 - Guardada no banco (`GlobalSettings`, parâmetro `G2W_SESSAO_UNICA`); vale no pedido seguinte, sem reiniciar nada.
 - Ligar apaga a lista de donos, para ninguém ser desligado por um login antigo. Desligar para de conferir.
-- Redefinir senha, desativar e "desconectar" um usuário continuam funcionando como antes e também liberam a vez dele.
+- Redefinir a senha ou desativar um usuário continua funcionando como antes e também libera a vez dele.
 
 ## O que o servidor guarda
 
-Tabela `G2WPainelSessoes`, uma linha por usuário comum que logou com a regra ligada: id do usuário, SHA-256 da identidade do dono, se o dono mandou identificador, se entrou pelo aplicativo e quando. Sem IP, sem modelo de aparelho, sem histórico. A linha some quando o dono sai, quando o administrador desconecta o usuário e quando a opção é ligada de novo.
+Tabela `G2WPainelSessoes`, uma linha por usuário comum que logou com a regra ligada: id do usuário, SHA-256 da identidade do dono, se o dono mandou identificador, se entrou pelo aplicativo e quando. Sem IP, sem modelo de aparelho, sem histórico. A linha some quando o dono sai, quando o administrador desativa o usuário ou redefine a senha dele, e quando a opção é ligada ou desligada.

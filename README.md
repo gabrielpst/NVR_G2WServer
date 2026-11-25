@@ -50,6 +50,16 @@ O `snapshot-updater` (sobe pelo entrypoint) guarda um JPEG por câmera em `/var/
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Um aparelho por vez (branch `sessao-unica-2026-11`, 2026-11-25, ainda sem build)
+
+Opção da instalação, **desligada por padrão**, que o administrador liga em `/gestao/usuarios`. Ligada, cada usuário comum usa o sistema em um aparelho de cada vez (aplicativo e site somados): um login em outro aparelho passa a ser o dono e desliga o anterior. Contrato para o aplicativo: `docs/api-sessao-unica.md`.
+
+- **Nunca por IP.** A identidade é o cabeçalho `X-G2W-Aparelho` (aplicativo novo; o servidor guarda só o SHA-256) ou, sem ele, a sessão criada no login (site, aplicativo antigo, desktop). Trocar de rede não desliga ninguém, e o mesmo aparelho logando de novo não derruba nada.
+- **Aparelho desligado:** qualquer rota responde `401` com `X-G2W-Sessao: substituida` e JSON `codigo: sessao_substituida`; página do site vai para `/login?motivo=outro-aparelho`, que mostra a frase. As chaves do ao vivo do usuário são apagadas na troca de dono (o vídeo do aparelho antigo para em até 15 s, o tempo que o motor guarda a chave).
+- **Administrador fora da regra.** Ligar não desliga ninguém na hora: vale a partir do próximo login. Sair pelo dono, desativar o usuário ou redefinir a senha libera a vez.
+- **Clientes antigos** (app até 1.1.2, desktop) continuam entrando. Limitações: pedidos com Basic sem o cabeçalho só são barrados quando o dono é um aparelho identificado; o app antigo desligado mostra lista vazia em vez da frase; quem fala direto com o motor por usuário e senha (RTSP, `/hls/<id>/index.m3u8`) não passa por esta regra.
+- Onde está: `G2WGestao::sessaoAssumir/sessaoConfere/sessaoRecusar` (`www/lib/Gestao.php`), chamadas em `user::doLogin`, `user::userStatus` e `user::doLogout` (`www/lib/lib.php`); `www/ajax/loginapp.php` (campos novos e recusa de identificador fora do formato); `POST /gestao/sessao-unica`. Guardado em `GlobalSettings` (`G2W_SESSAO_UNICA`) e na tabela `G2WPainelSessoes`, criada sozinha.
+
 ### Adicionar e remover câmera pelo painel: `/gestao/cameras` (branch `cadastro-camera-2026-11`, 2026-11-24, ainda sem build)
 
 Antes a tela mandava para o modo avançado. Agora o administrador cadastra e remove câmera em português, na mesma aba.

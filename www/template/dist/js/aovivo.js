@@ -105,6 +105,7 @@
         if (encerrado) return Promise.reject(new Error('sessao'));
         return fetch('/aovivo/estado', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (r) {
+                if (r.headers.get('X-G2W-Sessao') === 'substituida') { window.location.href = '/login?motivo=outro-aparelho'; throw new Error('sessao'); }
                 if (r.redirected || r.status === 401 || r.status === 403) { sessaoAcabou(); throw new Error('sessao'); }
                 if (!r.ok) throw new Error('estado ' + r.status);
                 return r.json();

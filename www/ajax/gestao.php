@@ -176,6 +176,7 @@ class gestao extends Controller
             $cams[] = array('id' => intval($c['id']), 'nome' => (string)$c['device_name']);
         }
         return $this->pagina('usuarios', 'Usuários', array(
+            'sessao_unica' => G2WGestao::sessaoUnicaLigada(),
             'dados' => array(
                 'usuarios' => $us['lista'], 'cameras' => $cams, 'eu' => intval($this->user->info['id']),
                 'acessos_desde' => $desde, 'senha_min' => G2WGestao::SENHA_MIN, 'lote_max' => G2WGestao::LOTE_MAX,
@@ -608,6 +609,20 @@ class gestao extends Controller
         }
         @file_put_contents($cache, json_encode($resultados), LOCK_EX);
         $this->json(array('ok' => true, 'resultados' => $resultados, 'servico' => 'Nominatim (OpenStreetMap)'));
+    }
+
+    /* POST /gestao/sessao-unica {ligado: bool}: liga ou desliga "um aparelho
+     * por vez" para os usuários comuns desta instalação. Vale no pedido
+     * seguinte; ligar não desliga ninguém na hora (docs/api-sessao-unica.md). */
+    public function postSessaoUnica()
+    {
+        $e = $this->entrada();
+        if (!isset($e['ligado']) || !is_bool($e['ligado'])) $this->falha(422, 'Informe se a opção fica ligada ou desligada.');
+        G2WGestao::ligarSessaoUnica($e['ligado']);
+        error_log('g2w-sessao-unica usuario='.intval($_SESSION['id']).' ligado='.($e['ligado'] ? 1 : 0));
+        $this->json(array('ok' => true, 'ligado' => $e['ligado'], 'msg' => $e['ligado']
+            ? 'Um aparelho por vez: ligado. Vale a partir do próximo login de cada usuário.'
+            : 'Um aparelho por vez: desligado.'));
     }
 
     public function postArmazenamento()

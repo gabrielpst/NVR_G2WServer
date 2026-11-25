@@ -14,13 +14,25 @@ class loginapp extends Controller {
 
     public function postData()
     {
+        // G2W 2026-11, "um aparelho por vez" (docs/api-sessao-unica.md): o
+        // identificador do aparelho, quando vem, tem de estar no formato
+        if (G2WGestao::aparelhoDoPedido() === false) {
+            return json_encode([
+                'success' => false,
+                'codigo' => 'aparelho_invalido',
+                'message' => 'Identificador do aparelho inválido.'
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
         $user_to_login = new user('username', $_POST['login']);
         $result = $user_to_login->doLogin($_POST['password'], true);
 
         if ($result === 'OK') {
             return json_encode([
                 'success' => true,
-                'server_uuid' => $this->getServerUuid()
+                'server_uuid' => $this->getServerUuid(),
+                'sessao_unica' => (G2WGestao::sessaoUnicaLigada() && empty($user_to_login->info['access_setup'])),
+                'aparelho_reconhecido' => is_string(G2WGestao::aparelhoDoPedido())
             ]);
         }
 

@@ -25,6 +25,9 @@ $g2w_v = @filemtime(__DIR__.'/dist/css/entrar.css').'-'.@filemtime(__DIR__.'/dis
             <p><?php echo G2WMarca::h(G2WMarca::subtitulo()); ?></p>
         </div>
 
+<?php if (isset($_GET['motivo']) && $_GET['motivo'] === 'outro-aparelho') { ?>
+        <p class="aviso-entrada" role="status">Sua conta foi acessada em outro aparelho. Entre de novo para continuar neste.</p>
+<?php } ?>
         <form method="post" action="/login" data-entrar novalidate>
             <div class="campo">
                 <label for="login">Usuário</label>

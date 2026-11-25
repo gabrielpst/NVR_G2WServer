@@ -450,3 +450,10 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--verde); 
 .lista-removidas .nota { display: block; margin-top: 2px; }
 #dlg-remover fieldset small { display: block; margin: 0 0 10px 28px; color: var(--texto-2); }
 #dlg-remover p { margin-bottom: 12px; }
+
+/* opção da instalação com chave (2026-11) */
+.opcao-instalacao { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.opcao-instalacao > div { flex: 1 1 320px; min-width: 0; }
+.opcao-instalacao h2 { font-size: 1.0625rem; margin: 0 0 4px; }
+.opcao-instalacao .nota { margin-top: 0; }
+.opcao-instalacao .opcao { font-weight: 600; white-space: nowrap; }

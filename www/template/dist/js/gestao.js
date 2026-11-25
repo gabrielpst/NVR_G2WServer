@@ -201,6 +201,21 @@
 
     // ----------------------------------------------------------- usuários
     function iniciarUsuarios() {
+        // "Um aparelho por vez": chave da instalação
+        var formSU = $('[data-form-sessao-unica]');
+        if (formSU) {
+            var caixaSU = formSU.elements.ligado, estadoSU = $('[data-estado]', formSU);
+            caixaSU.addEventListener('change', function () {
+                var quer = caixaSU.checked;
+                caixaSU.disabled = true;
+                enviar('sessao-unica', { ligado: quer }).then(function (r) {
+                    caixaSU.disabled = false;
+                    if (!r.ok) { caixaSU.checked = !quer; aviso(r.erro, 'erro'); return; }
+                    estadoSU.textContent = r.ligado ? 'Ligado' : 'Desligado';
+                    aviso(r.msg);
+                });
+            });
+        }
         var D = JSON.parse($('#dados-usuarios').textContent);
         var usuarios = D.usuarios;
         // casa2 antes de casa10

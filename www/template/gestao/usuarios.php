@@ -7,6 +7,16 @@ $json = json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
 
 <script type="application/json" id="dados-usuarios"><?php echo $json; ?></script>
 
+<section class="bloco" aria-labelledby="t-sessao-unica">
+    <form class="cartao opcao-instalacao" data-form-sessao-unica autocomplete="off" novalidate>
+        <div>
+            <h2 id="t-sessao-unica">Um aparelho por vez</h2>
+            <p class="nota" id="sessao-unica-ajuda">Ligado, cada usuário usa o sistema em um aparelho de cada vez, somando aplicativo e site: ao entrar em outro aparelho, o anterior é desligado e vê o aviso “Sua conta foi acessada em outro aparelho”. Trocar de Wi-Fi para 4G não desliga ninguém. Administradores ficam fora da regra. Ao ligar, ninguém é desligado na hora: vale a partir do próximo login. Aplicativos antigos entram normalmente, mas podem mostrar a lista vazia em vez do aviso.</p>
+        </div>
+        <label class="opcao"><input type="checkbox" name="ligado" aria-describedby="sessao-unica-ajuda"<?php echo $sessao_unica ? ' checked' : ''; ?>> <span data-estado><?php echo $sessao_unica ? 'Ligado' : 'Desligado'; ?></span></label>
+    </form>
+</section>
+
 <section class="bloco" aria-label="Lista de usuários">
     <div class="barra-ferramentas">
         <div class="campo campo-busca">

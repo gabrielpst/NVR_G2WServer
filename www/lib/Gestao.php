@@ -87,7 +87,7 @@ class G2WGestao
         if (self::$tabelasOk !== null) return self::$tabelasOk;
         try {
             // caminho normal: as duas já existem e nenhum CREATE é executado
-            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 4) return self::$tabelasOk = true;
+            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 5) return self::$tabelasOk = true;
             self::q("CREATE TABLE IF NOT EXISTS G2WPainelAcessos (
                 user_id INT NOT NULL PRIMARY KEY,
                 ultimo_acesso INT NOT NULL,
@@ -119,6 +119,15 @@ class G2WGestao
                 removida_em INT NOT NULL,
                 apagando TINYINT(1) NOT NULL DEFAULT 0
             ) DEFAULT CHARSET=utf8mb4");
+            // "Um aparelho por vez": o dono atual de cada usuário comum. Só o
+            // SHA-256 da identidade (aparelho ou sessão); sem IP, sem histórico.
+            self::q("CREATE TABLE IF NOT EXISTS G2WPainelSessoes (
+                user_id INT NOT NULL PRIMARY KEY,
+                dono CHAR(64) NOT NULL,
+                identificado TINYINT(1) NOT NULL DEFAULT 0,
+                pelo_app TINYINT(1) NOT NULL DEFAULT 0,
+                desde INT NOT NULL
+            ) DEFAULT CHARSET=ascii");
             self::$tabelasOk = true;
         } catch (Throwable $e) {
             error_log('G2W gestao: tabelas do painel indisponiveis: '.$e->getMessage());
@@ -149,6 +158,146 @@ class G2WGestao
                 'iii', array(intval($userId), time(), $peloApp ? 1 : 0));
         } catch (Throwable $e) {
             error_log('G2W gestao: registrarLogin: '.$e->getMessage());
+        }
+    }
+
+    // ------------------------------------- um aparelho por vez (sessão única)
+    //
+    // Contrato em docs/api-sessao-unica.md. Opção da instalação, desligada por
+    // padrão. Ligada, cada usuário comum tem um "dono": o aparelho (ou a
+    // sessão) do login mais recente. Pedido de quem não é o dono recebe 401
+    // com X-G2W-Sessao: substituida. Nunca usa o IP.
+
+    const SESSAO_UNICA_PARAM = 'G2W_SESSAO_UNICA';
+    private static $sessaoUnica = null;
+
+    public static function sessaoUnicaLigada()
+    {
+        if (self::$sessaoUnica !== null) return self::$sessaoUnica;
+        try {
+            $r = self::q("SELECT value FROM GlobalSettings WHERE parameter=?", 's', array(self::SESSAO_UNICA_PARAM));
+            self::$sessaoUnica = ($r && (string)$r[0]['value'] === '1');
+        } catch (Throwable $e) {
+            error_log('G2W gestao: sessao unica: '.$e->getMessage());
+            self::$sessaoUnica = false;   // na dúvida, não derruba ninguém
+        }
+        return self::$sessaoUnica;
+    }
+
+    /* Liga ou desliga. Ligar apaga os donos: ninguém é desligado por um login
+     * antigo; a regra vale a partir do próximo login de cada um. */
+    public static function ligarSessaoUnica($ligar)
+    {
+        if (!self::garantirTabelas()) throw new RuntimeException('tabelas indisponiveis');
+        $v = $ligar ? '1' : '0';
+        if (self::q("SELECT parameter FROM GlobalSettings WHERE parameter=?", 's', array(self::SESSAO_UNICA_PARAM))) {
+            self::q("UPDATE GlobalSettings SET value=? WHERE parameter=?", 'ss', array($v, self::SESSAO_UNICA_PARAM));
+        } else {
+            self::q("INSERT INTO GlobalSettings (parameter, value) VALUES (?, ?)", 'ss', array(self::SESSAO_UNICA_PARAM, $v));
+        }
+        self::q("DELETE FROM G2WPainelSessoes");
+        self::$sessaoUnica = (bool)$ligar;
+    }
+
+    /* Identidade mandada pelo aplicativo no cabeçalho X-G2W-Aparelho.
+     * null = não veio; false = veio fora do formato; senão o SHA-256. */
+    public static function aparelhoDoPedido()
+    {
+        if (!isset($_SERVER['HTTP_X_G2W_APARELHO'])) return null;
+        $v = (string)$_SERVER['HTTP_X_G2W_APARELHO'];
+        if (!preg_match('/^[A-Za-z0-9._\-]{16,128}$/', $v)) return false;
+        return hash('sha256', 'aparelho:'.$v);
+    }
+
+    /* Login certo: este aparelho passa a ser o dono. Se o dono anterior era
+     * outro, as chaves do ao vivo do usuário são apagadas (as do aparelho novo
+     * ainda não existem: ele pede depois do login). Chamado pelo
+     * user::doLogin(); nunca pode derrubar o login. */
+    public static function sessaoAssumir($userId, $admin, $peloApp)
+    {
+        try {
+            unset($_SESSION['g2w_dono']);
+            if ($admin || !self::sessaoUnicaLigada() || !self::garantirTabelas()) return;
+            $userId = intval($userId);
+            $h = self::aparelhoDoPedido();
+            $identificado = is_string($h);
+            // sem cabeçalho (site, app antigo, desktop): a identidade é esta sessão
+            $dono = $identificado ? $h : hash('sha256', 'sessao:'.bin2hex(random_bytes(32)));
+            $antes = self::q("SELECT dono FROM G2WPainelSessoes WHERE user_id=?", 'i', array($userId));
+            if ($antes && !hash_equals((string)$antes[0]['dono'], $dono)) self::apagarChavesDeVideo($userId);
+            self::q("REPLACE INTO G2WPainelSessoes (user_id, dono, identificado, pelo_app, desde) VALUES (?, ?, ?, ?, ?)",
+                'isiii', array($userId, $dono, $identificado ? 1 : 0, $peloApp ? 1 : 0, time()));
+            $_SESSION['g2w_dono'] = $dono;
+        } catch (Throwable $e) {
+            error_log('G2W gestao: sessaoAssumir: '.$e->getMessage());
+        }
+    }
+
+    /* Este pedido vem do dono? $comSessao: autenticado pelo cookie (true) ou
+     * por Basic sem sessão (false). Falha de banco nunca derruba ninguém. */
+    public static function sessaoConfere($userId, $admin, $comSessao)
+    {
+        if ($admin || !self::sessaoUnicaLigada()) return true;
+        try {
+            if (!self::q("SHOW TABLES LIKE 'G2WPainelSessoes'")) return true;
+            $r = self::q("SELECT dono, identificado FROM G2WPainelSessoes WHERE user_id=?", 'i', array(intval($userId)));
+        } catch (Throwable $e) {
+            error_log('G2W gestao: sessaoConfere: '.$e->getMessage());
+            return true;
+        }
+        if (!$r) return true;   // ainda sem dono: a regra começa no próximo login
+        $dono = (string)$r[0]['dono'];
+        if ($comSessao) {
+            return isset($_SESSION['g2w_dono']) && is_string($_SESSION['g2w_dono']) && hash_equals($dono, $_SESSION['g2w_dono']);
+        }
+        $h = self::aparelhoDoPedido();
+        if (is_string($h)) return hash_equals($dono, $h);
+        if ($h === false) return false;
+        // Basic sem cabeçalho não diz de que aparelho vem: só passa enquanto o
+        // dono também for um cliente sem identificação (limitação no contrato)
+        return !intval($r[0]['identificado']);
+    }
+
+    /* Resposta ao aparelho que deixou de ser o dono. Encerra a sessão dele. */
+    public static function sessaoRecusar()
+    {
+        $pelo_app = !empty($_SESSION['from_client']);
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION = array();
+            session_destroy();
+        }
+        $aceita = isset($_SERVER['HTTP_ACCEPT']) ? (string)$_SERVER['HTTP_ACCEPT'] : '';
+        $metodo = isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET';
+        header('Cache-Control: no-store');
+        header('X-G2W-Sessao: substituida');
+        // página aberta no navegador: vai para a tela de entrada, com o motivo
+        if (!$pelo_app && $metodo === 'GET' && strpos($aceita, 'text/html') !== false && !isset($_SERVER['PHP_AUTH_USER'])) {
+            header('Location: /login?motivo=outro-aparelho');
+            exit;
+        }
+        http_response_code(401);
+        header('Content-Type: application/json; charset=utf-8');
+        header('X-Content-Type-Options: nosniff');
+        $msg = 'Sua conta foi acessada em outro aparelho.';
+        die(json_encode(array('ok' => false, 'success' => false, 'codigo' => 'sessao_substituida', 'erro' => $msg, 'message' => $msg), JSON_UNESCAPED_UNICODE));
+    }
+
+    /* Sair pelo aparelho que é o dono libera a vez. */
+    public static function sessaoLiberarSeDono($userId)
+    {
+        try {
+            if (empty($_SESSION['g2w_dono']) || !self::q("SHOW TABLES LIKE 'G2WPainelSessoes'")) return;
+            self::q("DELETE FROM G2WPainelSessoes WHERE user_id=? AND dono=?", 'is', array(intval($userId), (string)$_SESSION['g2w_dono']));
+        } catch (Throwable $e) {
+            error_log('G2W gestao: sessaoLiberar: '.$e->getMessage());
+        }
+    }
+
+    private static function apagarChavesDeVideo($userId)
+    {
+        foreach (array('HlsAuthTokens', 'RtspAuthTokens') as $t) {
+            try { self::q("DELETE FROM {$t} WHERE user_id=?", 'i', array(intval($userId))); }
+            catch (Throwable $e) { /* tabela ausente em versão antiga do banco */ }
         }
     }
 
@@ -1143,10 +1292,10 @@ class G2WGestao
         foreach ($ids as $id) {
             $id = intval($id);
             self::q("UPDATE ActiveUsers SET kick=1 WHERE id=?", 'i', array($id));
-            foreach (array('HlsAuthTokens', 'RtspAuthTokens') as $t) {
-                try { self::q("DELETE FROM {$t} WHERE user_id=?", 'i', array($id)); }
-                catch (Throwable $e) { /* tabela ausente em versão antiga do banco */ }
-            }
+            self::apagarChavesDeVideo($id);
+            // libera a vez no "um aparelho por vez": o próximo login é o dono
+            try { if (self::garantirTabelas()) self::q("DELETE FROM G2WPainelSessoes WHERE user_id=?", 'i', array($id)); }
+            catch (Throwable $e) { error_log('G2W gestao: liberar vez: '.$e->getMessage()); }
         }
     }
 

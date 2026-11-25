@@ -489,7 +489,11 @@ class user{
 	private function userStatus($type){
 		if (empty($_SESSION['id'])) {
 			if ($type == 'basic'){
-				return ($this->basicAuthCheck()) ? true : false;
+				if (!$this->basicAuthCheck()) return false;
+				// G2W 2026-11, "um aparelho por vez": pedido com Basic de quem
+				// não é o dono atual (ver docs/api-sessao-unica.md)
+				if (!G2WGestao::sessaoConfere($this->info['id'], !empty($this->info['access_setup']), false)) G2WGestao::sessaoRecusar();
+				return true;
 			} else {
 				return false;
 			}
@@ -499,6 +503,12 @@ class user{
 			$_SESSION['message'] = USER_KICKED;
 			session_destroy();
 			return false;
+		}
+		// G2W 2026-11, "um aparelho por vez": a conta entrou em outro aparelho
+		// depois deste. Resposta própria (401 + X-G2W-Sessao), não o
+		// redirecionamento de sessão expirada.
+		if (!empty($this->info['id']) && !G2WGestao::sessaoConfere($this->info['id'], !empty($this->info['access_setup']), true)) {
+			G2WGestao::sessaoRecusar();
 		}
 		// require login when opening admin pages from client
 		if ($_SESSION['from_client'] && !$_SESSION['from_client_manual']) {
@@ -566,11 +576,13 @@ class user{
 				$_SESSION['from_client'] = $from_client; 
 				if ($_SESSION['from_client']) { $_SESSION['from_client_manual'] = true; } #if user manually logging in from client
 				G2WGestao::registrarLogin($this->info['id'], (bool)$from_client);
+				G2WGestao::sessaoAssumir($this->info['id'], !empty($this->info['access_setup']), (bool)$from_client);
 				if (isset($this->info['change_password']) && $this->info['change_password']) return 'OK CHANGE_PASSWORD';
 				return 'OK'; } 
 		else { return LOGIN_WRONG; };
 	}
 	public function doLogout(){
+		if (!empty($this->info['id'])) G2WGestao::sessaoLiberarSeDono($this->info['id']);
 		if (!empty($_SESSION['from_client_manual'])){ #if returning to client unset manual login var
 			unset($_SESSION['from_client_manual']);
 		} else { #if from web -- destroy session on logout
