@@ -22,6 +22,14 @@ DOCKER_BUILDKIT=0 docker build -t g2wserver:<tag> --build-arg G2W_GIT_REF=<branc
 
 No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada ele fecha os arquivos de gravação abertos, e é nesse fechamento que o MP4 ganha o índice.
 
+### Miniaturas das câmeras
+
+O `snapshot-updater` (sobe pelo entrypoint) guarda um JPEG por câmera em `/var/lib/bluecherry/snapshots/`; é a mesma imagem no painel e no app.
+
+- Padrão: uma câmera por vez, volta a cada `SNAPSHOT_INTERVAL` (120 s). Com muitas câmeras a volta demora mais que isso (53 câmeras: cerca de 4 min).
+- Horário fixo por instalação: criar `/etc/g2w/miniaturas.json` com `{ "horarios": ["08:00", "14:00"], "fuso": "America/Campo_Grande" }`. A instalação passa a renovar só nesses horários e fica com a imagem até o próximo. Câmera nova, ou que falhou na hora, é tentada de novo a cada 10 min. O arquivo é relido a cada volta, sem reinício. O painel mostra a hora da imagem no selo.
+- A captura roda com `timeout -k`: um ffmpeg preso no RTSP não trava mais a fila (2026-11-25).
+
 ### Mudanças do motor em 2026-11 (branch `servidor-2026-11`)
 
 - Servidor HLS não trava mais depois de o container ser congelado (snapshot de backup do Proxmox).

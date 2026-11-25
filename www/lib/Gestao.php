@@ -215,6 +215,15 @@ class G2WGestao
         $global = self::agendaGlobal();
         $slot = intval(date('G')) + intval(date('w')) * 24;
 
+        // miniaturas em horário fixo nesta instalação? (ver misc/snapshots/snapshot-lib.php)
+        $agenda_min = null; $corte_min = 0;
+        if (is_file('/usr/share/bluecherry/snapshots/snapshot-lib.php')) {
+            require_once '/usr/share/bluecherry/snapshots/snapshot-lib.php';
+            if (function_exists('bc_snap_agenda') && ($agenda_min = bc_snap_agenda())) {
+                $corte_min = bc_snap_ultimo_horario($agenda_min, $agora);
+            }
+        }
+
         $linhas = self::q("SELECT id, device_name, protocol, device, (rtsp_username IS NOT NULL AND rtsp_username<>'') AS tem_credencial,
             disabled, max_age_days, schedule, schedule_override_global FROM Devices ORDER BY device_name");
         $removidas = self::idsRemovidas();
@@ -255,6 +264,12 @@ class G2WGestao
 
             $snap_ts = @filemtime(self::arquivoMiniatura($id));
             $imagem_ok = $snap_ts && ($agora - $snap_ts) < self::MIN_SEM_IMAGEM * 60;
+            // instalação com miniatura em horário fixo (/etc/g2w/miniaturas.json):
+            // a imagem "em dia" é a do último horário agendado; 20 min de folga
+            // para a volta de captura terminar.
+            if ($agenda_min) {
+                $imagem_ok = $snap_ts && ($snap_ts >= $corte_min || ($agora - $corte_min) < 1200);
+            }
 
             $antiga = (isset($agg[$id]) && $agg[$id]['antiga']) ? intval($agg[$id]['antiga']) : null;
 
@@ -297,6 +312,7 @@ class G2WGestao
                 'min_sem_gravar' => $min_sem_gravar,
                 'imagem_ok' => (bool)$imagem_ok,
                 'imagem_ts' => $snap_ts ?: null,
+                'imagem_agendada' => (bool)$agenda_min,
                 'mais_antiga' => $antiga,
                 'dias_guardados' => $antiga ? max(0, intval(floor(($agora - $antiga) / 86400))) : 0,
                 'bytes' => isset($agg[$id]) ? floatval($agg[$id]['bytes']) : 0.0,

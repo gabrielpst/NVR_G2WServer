@@ -23,6 +23,73 @@ if (!defined('BC_FFMPEG')) {
     define('BC_FFMPEG', 'env LD_LIBRARY_PATH=/usr/lib/bluecherry/ /usr/lib/bluecherry/ffmpeg');
 }
 
+/**
+ * Agenda de miniaturas por instalação (opcional).
+ *
+ * Sem o arquivo, vale o padrão: renovar a cada SNAPSHOT_INTERVAL (~2 min).
+ * Com /etc/g2w/miniaturas.json a instalação passa a renovar só em horários
+ * fixos do dia e fica com aquela imagem até o próximo horário:
+ *
+ *   { "horarios": ["08:00", "14:00"], "fuso": "America/Campo_Grande" }
+ *
+ * O fuso é explícito porque o PHP de linha de comando do container roda em UTC.
+ * Devolve array('horarios' => [minutos do dia, ...] em ordem, 'fuso' => DateTimeZone)
+ * ou null quando não há agenda válida.
+ */
+if (!defined('BC_SNAP_AGENDA')) {
+    define('BC_SNAP_AGENDA', '/etc/g2w/miniaturas.json');
+}
+function bc_snap_agenda()
+{
+    if (!is_readable(BC_SNAP_AGENDA)) {
+        return null;
+    }
+    $d = json_decode((string)@file_get_contents(BC_SNAP_AGENDA), true);
+    if (!is_array($d) || empty($d['horarios']) || !is_array($d['horarios'])) {
+        return null;
+    }
+    $min = array();
+    foreach ($d['horarios'] as $h) {
+        if (is_string($h) && preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', trim($h), $m)) {
+            $min[intval($m[1]) * 60 + intval($m[2])] = true;
+        }
+    }
+    if (!$min) {
+        return null;
+    }
+    $min = array_keys($min);
+    sort($min);
+    try {
+        $tz = new DateTimeZone(!empty($d['fuso']) && is_string($d['fuso']) ? $d['fuso'] : 'America/Campo_Grande');
+    } catch (Exception $e) {
+        $tz = new DateTimeZone('America/Campo_Grande');
+    }
+    return array('horarios' => $min, 'fuso' => $tz);
+}
+
+/**
+ * Timestamp do horário agendado mais recente (hoje ou ontem) em relação a $agora.
+ */
+function bc_snap_ultimo_horario($agenda, $agora = null)
+{
+    $agora = ($agora === null) ? time() : intval($agora);
+    $dia = new DateTime('@' . $agora);
+    $dia->setTimezone($agenda['fuso']);
+    $dia->setTime(0, 0, 0);
+    $melhor = 0;
+    foreach (array(-1, 0) as $desloc) {
+        $base = clone $dia;
+        if ($desloc) { $base->modify('-1 day'); }
+        foreach ($agenda['horarios'] as $m) {
+            $t = clone $base;
+            $t->setTime(intdiv($m, 60), $m % 60, 0);
+            $ts = $t->getTimestamp();
+            if ($ts <= $agora && $ts > $melhor) { $melhor = $ts; }
+        }
+    }
+    return $melhor;
+}
+
 /** Garante o diretório de snapshots; devolve o caminho. */
 function bc_snap_dir()
 {

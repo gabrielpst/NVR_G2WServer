@@ -52,8 +52,20 @@ while (true) {
         "WHERE disabled='0' AND protocol IN ('IP-RTSP','IP','IP-MJPEG')"
     );
 
+    // Agenda por instalação (/etc/g2w/miniaturas.json): renova só nos horários
+    // fixos. Fora deles, só captura a câmera que ainda não tem miniatura
+    // (câmera nova) ou cuja miniatura é anterior ao último horário (falhou na
+    // hora, ou o container estava parado). Relida a cada volta: mudar o arquivo
+    // não exige reinício.
+    $agenda = bc_snap_agenda();
+    $corte = $agenda ? bc_snap_ultimo_horario($agenda, $t0) : 0;
+
     if (is_array($cams)) {
         foreach ($cams as $c) {
+            if ($agenda) {
+                $mt = @filemtime(bc_snap_path($c['id']));
+                if ($mt && $mt >= $corte) { continue; }
+            }
             $url = bc_snap_rtsp_url($c);
             if (!$url) { continue; }
             $ok = bc_snap_grab($url, bc_snap_path($c['id']));
@@ -66,5 +78,15 @@ while (true) {
     // dorme o resto do intervalo (desconta o tempo gasto capturando)
     $elapsed = time() - $t0;
     $sleep = $INTERVAL - $elapsed;
+    if ($agenda) {
+        // com agenda, a câmera fora do ar seria tentada a cada volta até o
+        // próximo horário: espaça as novas tentativas em 10 min, mas acorda
+        // assim que um horário agendado chega.
+        for ($i = 0; $i < 20; $i++) {
+            sleep(30);
+            if (bc_snap_ultimo_horario($agenda) > $corte) { break; }
+        }
+        continue;
+    }
     if ($sleep > 0) { sleep($sleep); }
 }
