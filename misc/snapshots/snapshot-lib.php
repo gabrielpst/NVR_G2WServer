@@ -83,8 +83,11 @@ function bc_snap_grab($rtspUrl, $destPath, $timeoutSec = 15)
     // via RTMP/MediaMTX, GOP ~5s) e o JPEG sai cinza com fragmentos (1,6 KB).
     // Custo: espera até o próximo IDR (≤ 1 GOP, ~4-5 s medidos). Testado nas
     // duas câmeras do Silvestre4 — ver contexto 2026-09-03 no Nextcloud.
+    // -k 3 (2026-11-25): o ffmpeg preso na leitura do RTSP ignora o TERM do
+    // timeout e fica pendurado, travando a fila inteira (K Soluções: 6 h sem
+    // miniatura nova). Com -k, 3 s depois do TERM vem o KILL.
     $cmd = sprintf(
-        'timeout %d %s -nostdin -rtsp_transport tcp -skip_frame nokey -fflags nobuffer -flags low_delay ' .
+        'timeout -k 3 %d %s -nostdin -rtsp_transport tcp -skip_frame nokey -fflags nobuffer -flags low_delay ' .
         '-probesize 500000 -analyzeduration 1000000 -y -i %s ' .
         '-vf scale=640:-2 -frames:v 1 -q:v 6 -f image2 %s >/dev/null 2>&1',
         intval($timeoutSec), BC_FFMPEG,
