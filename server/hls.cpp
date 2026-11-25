@@ -59,6 +59,7 @@ extern "C" {
 #define HLS_SEGMENT_SIZE            (188 * 7 * 1024)        // Most accepted HLS segment size
 #define HLS_SEGMENT_SIZE_MAX        (188 * 7 * 1024 * 5)    // Maximum allowed segment size
 #define HLS_SEGMENT_DURATION        3.0                     // Most accepted HLS segment duration
+#define HLS_SEGMENT_DURATION_SLACK  0.1                     // A keyframe this close to the target duration still cuts (camera GOP jitter)
 #define HLS_HEADER_EXPIRE_SEC       2                       // HLS header expiration seconds
 #define HLS_SERVER_CHUNK_MAX        65535                   // RX chunk size to send per one call
 #define HLS_TOKEN_CACHE_SEC         15                      // Token re-checked against the database this often
@@ -1498,6 +1499,8 @@ bool hls_content::clear_window()
     _in_buffer.clear();
     _append_criteria = false;
     _pts = 0;
+    _have_chunk = false;
+    _chunk_pts = 0;
     /* _cc is NOT reset: segment ids (and so EXT-X-MEDIA-SEQUENCE and the
      * segment URLs) must keep increasing across reconnections, or players and
      * caches mistake new segments for the old ones with the same number. */
@@ -1514,6 +1517,8 @@ void hls_content::reset_input()
     _in_buffer.clear();
     _append_criteria = false;
     _pts = 0;
+    _have_chunk = false;
+    _chunk_pts = 0;
 
     unlock_mutex();
 }
@@ -1596,30 +1601,40 @@ bool hls_content::add_data(uint8_t *data, size_t size, int64_t pts, hls_segment:
     get_config(&segment_size, &segment_duration);
     if (!segment_size && segment_duration == 0.) return false;
 
-    if (_append_criteria && (_meta.pts != pts))
-    {
-        _append_criteria = false;
-        finish_segment(pts);
-    }
-
-    if (!_in_buffer.append(data, size)) return false;
+    /* The muxer flushes one packet in one or more chunks, all with the same
+     * pts and flags (audio chunks carry the last video pts and no flags). A
+     * chunk with a new pts is the first one of a new packet.
+     *
+     * G2W 2026-11: the segment is closed BEFORE the keyframe that ends it, so
+     * every segment starts with that keyframe (and the PAT/PMT the mpegts
+     * muxer writes in front of it). Before, the keyframe was kept as the last
+     * frame of the closing segment: each segment started with frames that
+     * depend on the previous one, the playlist's INDEPENDENT-SEGMENTS was
+     * false, and a player starting at a segment had to wait for the next
+     * keyframe (up to a whole segment) before showing anything. */
     bool is_key = flags & AV_PKT_FLAG_KEY;
-    int64_t last_pts = get_last_pts();
-    if (last_pts <= 0) update_pts(pts);
+    bool new_packet = !_have_chunk || pts != _chunk_pts;
+    _have_chunk = true;
+    _chunk_pts = pts;
+
+    if (get_last_pts() <= 0) update_pts(pts);
 
     int64_t pts_diff = pts - get_last_pts();
     double duration = pts_diff > 0 ? (double)pts_diff / (double)90000 : 0;
 
-    if (_in_buffer.used() > HLS_SEGMENT_SIZE_MAX || (is_key &&
-        ((segment_duration > 0. && duration >= segment_duration) ||
-        (segment_size > 0 && _in_buffer.used() >= segment_size))))
+    if (new_packet && _in_buffer.used() > 0 &&
+        (_in_buffer.used() > HLS_SEGMENT_SIZE_MAX || (is_key &&
+        ((segment_duration > 0. && duration >= segment_duration - HLS_SEGMENT_DURATION_SLACK) ||
+        (segment_size > 0 && _in_buffer.used() >= segment_size)))))
     {
-        _append_criteria = true;
         _meta.duration = duration;
         _meta.is_key = is_key;
         _meta.type = type;
-        _meta.pts = pts;
+        _meta.pts = pts;     /* start of the next segment */
+        finish_segment(pts);
     }
+
+    if (!_in_buffer.append(data, size)) return false;
 
     return true;
 }

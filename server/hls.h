@@ -348,6 +348,8 @@ private:
     
     int                 _device_id = 0;
     int64_t             _pts = 0;
+    bool                _have_chunk = false;   /* a chunk was already received */
+    int64_t             _chunk_pts = 0;        /* pts of the last chunk received */
     uint32_t            _cc = 0;
 
     // Helper functions for mutex operations

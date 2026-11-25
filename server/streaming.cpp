@@ -368,6 +368,10 @@ static int bc_streaming_setup_hls(struct bc_record *bc_rec, std::shared_ptr<cons
 	}
 
 	ctx->packet_size = packet_size;
+	/* Each packet's bytes must reach hls_io_write before the next packet is
+	 * written: the segmenter tells packets apart by the pts/flags set right
+	 * before av_write_frame, and cuts a segment in front of a keyframe. */
+	ctx->flush_packets = 1;
 
 	bufptr = (unsigned char *)av_malloc(packet_size);
 	if (!bufptr) {
