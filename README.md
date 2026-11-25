@@ -50,6 +50,22 @@ O `snapshot-updater` (sobe pelo entrypoint) guarda um JPEG por câmera em `/var/
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Ao vivo com menos atraso (branch `aovivo-atraso-2026-11`, 2026-11-25, ainda sem build de produção)
+
+Antes, o app ficava de 15 a 20 s atrás do tempo real: o player espera 3 × `TARGETDURATION` atrás da ponta quando a playlist não diz nada, e os segmentos tinham 4 a 5 s. Mudou no motor (`server/hls.cpp`), sem mudança no app:
+
+- **Segmento começa no quadro-chave.** Antes o quadro-chave que fechava um segmento ficava no fim dele, e o seguinte começava com quadros que não se decodificam sozinhos.
+- **`TARGETDURATION`** = maior segmento arredondado (era arredondado para cima + 1).
+- **`EXT-X-SERVER-CONTROL:HOLD-BACK`** = máx(2 × maior segmento, 3 s): o ExoPlayer e o hls.js tocam essa distância atrás da ponta.
+- **Alvo de segmento de 1 s** (era 3 s). O segmento nunca é menor que o intervalo de quadro-chave da câmera (GOP): câmera com GOP de 4 s continua com segmentos de 4 s.
+- **A playlist guarda pelo menos 12 s** (e pelo menos `hls_window_size` segmentos), e começa a listar com 3 segmentos (antes esperava a janela inteira: 15 a 25 s sem vídeo depois de a câmera reconectar).
+- **`Devices.hls_segment_duration/size/window_size` valem desde a partida da câmera** (antes só se mudassem com ela rodando). 0 = padrão do motor. Antes, duração e tamanho 0 aplicados com a câmera no ar paravam o ao vivo dela.
+
+Ajustes sem build, no ambiente do `bc-server` (compose):
+- `G2W_HLS_SEGMENTO_ALVO` (s, padrão 1.0): alvo das câmeras com 0 no banco.
+- `G2W_HLS_HOLD_BACK_SEGMENTOS` (padrão 2.0; 0 tira a etiqueta) e `G2W_HLS_HOLD_BACK_MIN` (s, padrão 3.0).
+- Por câmera: `Devices.hls_segment_duration` (0 = padrão do motor).
+
 ### Um aparelho por vez (branch `sessao-unica-2026-11`, 2026-11-25, ainda sem build)
 
 Opção da instalação, **desligada por padrão**, que o administrador liga em `/gestao/usuarios`. Ligada, cada usuário comum usa o sistema em um aparelho de cada vez (aplicativo e site somados): um login em outro aparelho passa a ser o dono e desliga o anterior. Contrato para o aplicativo: `docs/api-sessao-unica.md`.

@@ -59,7 +59,9 @@ extern "C" {
 #define HLS_WINDOW_SIZE             5                       // Default HLS window size
 #define HLS_SEGMENT_SIZE            (188 * 7 * 1024)        // Most accepted HLS segment size
 #define HLS_SEGMENT_SIZE_MAX        (188 * 7 * 1024 * 5)    // Maximum allowed segment size
-#define HLS_SEGMENT_DURATION        3.0                     // Most accepted HLS segment duration
+#define HLS_SEGMENT_DURATION        1.0                     // Target segment duration (G2W 2026-11: was 3.0); a segment still lasts at least one camera GOP
+#define HLS_WINDOW_MIN_SEC          12.0                    // Playlist keeps at least this much video, whatever the segment length
+#define HLS_PLAYLIST_MIN_SEGMENTS   3                       // Segments needed before the playlist lists any
 #define HLS_HOLD_BACK_SEGMENTS      2.0                     // HOLD-BACK = this many of the longest segment...
 #define HLS_HOLD_BACK_MIN           3.0                     // ...but never less than this (seconds)
 #define HLS_SEGMENT_DURATION_SLACK  0.1                     // A keyframe this close to the target duration still cuts (camera GOP jitter)
@@ -825,7 +827,9 @@ bool hls_session::create_response()
             else std_string_append(body, "#EXT-X-MAP:URI=\"init.mp4\"\n");
         }
 
-        if (window_size >= window_max)
+        /* Listing started only once the whole window was filled: after a
+         * camera reconnection that meant 15 to 25 s without video. */
+        if (window_size >= window_max || window_size >= HLS_PLAYLIST_MIN_SEGMENTS)
         {
             for (size_t i = 0; i < window_size; i++)
             {
@@ -1551,8 +1555,15 @@ bool hls_content::append_segment(hls_segment *segment)
     if (_fmp4 && _use_initial && !_init_segment) 
         set_initial_segment(segment);
 
-    while (_config.window_size && _window.size() > _config.window_size) {
+    /* Keep at least window_size segments AND at least HLS_WINDOW_MIN_SEC of
+     * video: with 1 s segments, 5 segments would leave a phone on a slow
+     * network almost no margin behind the HOLD-BACK. */
+    double total = 0.;
+    for (size_t i = 0; i < _window.size(); i++) total += _window[i]->_meta.duration;
+    while (_config.window_size && _window.size() > _config.window_size &&
+           total - _window.front()->_meta.duration >= HLS_WINDOW_MIN_SEC) {
         hls_segment *front = _window.front();
+        total -= front->_meta.duration;
         delete front;
 
         _window.pop_front();
@@ -1916,6 +1927,28 @@ int hls_event_callback(void *events, void* data, int reason)
 // HLS LISTENER
 //////////////////////////////////////////////////
 
+static double env_double(const char *name, double def, double min, double max);
+
+/* Default target segment duration: HLS_SEGMENT_DURATION, or the bc-server's
+ * G2W_HLS_SEGMENTO_ALVO environment variable (seconds), read once. */
+static double hls_default_segment_duration()
+{
+    static double d = env_double("G2W_HLS_SEGMENTO_ALVO", HLS_SEGMENT_DURATION, 0.5, 10.);
+    return d;
+}
+
+/* Live HLS settings of one camera, from its Devices row. 0 (or less) means
+ * "use the default": a row with duration and size both 0 used to stop the
+ * camera's live view (add_data refuses to segment). */
+hls_config hls_config_for_device(double segment_duration, long segment_size, long window_size)
+{
+    hls_config c;
+    c.segment_duration = segment_duration > 0. ? segment_duration : hls_default_segment_duration();
+    c.segment_size = segment_size > 0 ? (size_t)segment_size : 0;
+    c.window_size = window_size > 0 ? (size_t)window_size : HLS_WINDOW_SIZE;
+    return c;
+}
+
 /* Number from the environment, or def when unset, invalid or out of range */
 static double env_double(const char *name, double def, double min, double max)
 {
@@ -1957,12 +1990,13 @@ hls_listener::hls_listener()
 
     _config.window_size = HLS_WINDOW_SIZE;
     _config.segment_size = HLS_SEGMENT_SIZE;
-    _config.segment_duration = HLS_SEGMENT_DURATION;
+    _config.segment_duration = hls_default_segment_duration();
 
     _hold_back_segments = env_double("G2W_HLS_HOLD_BACK_SEGMENTOS", HLS_HOLD_BACK_SEGMENTS, 0., 10.);
     _hold_back_min = env_double("G2W_HLS_HOLD_BACK_MIN", HLS_HOLD_BACK_MIN, 0., 60.);
-    bc_log(Info, "HLS live: HOLD-BACK = max(%.2f x longest segment, %.2f s)%s",
-           _hold_back_segments, _hold_back_min, _hold_back_segments > 0. ? "" : " (disabled)");
+    bc_log(Info, "HLS live: default segment %.2f s; HOLD-BACK = max(%.2f x longest segment, %.2f s)%s",
+           _config.segment_duration, _hold_back_segments, _hold_back_min,
+           _hold_back_segments > 0. ? "" : " (disabled)");
 
     _init = true;
 }

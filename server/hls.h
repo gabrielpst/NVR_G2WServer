@@ -299,6 +299,8 @@ typedef struct {
     double segment_duration;
 } hls_config;
 
+hls_config hls_config_for_device(double segment_duration, long segment_size, long window_size);
+
 class hls_content
 {
 public:

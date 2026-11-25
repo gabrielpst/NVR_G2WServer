@@ -151,6 +151,15 @@ int bc_streaming_setup(struct bc_record *bc_rec, bc_streaming_type bc_type, std:
 		lv.hls_wanted = true;
 		lv.hls_stall_limit = HLS_STALL_SEC;
 
+		/* G2W 2026-11: the camera's own settings (Devices.hls_*) used to be
+		 * applied only when they changed while it was running; until then
+		 * the server-wide defaults were used. Apply them from the start. */
+		if (hls_content *content = hls_content_of(bc_rec)) {
+			hls_config config = hls_config_for_device(bc_rec->cfg.hls_segment_duration,
+				bc_rec->cfg.hls_segment_size, bc_rec->cfg.hls_window_size);
+			content->set_config(&config);
+		}
+
 		ret = bc_streaming_setup_hls(bc_rec, props);
 		if (ret)
 			lv.hls_retry_at = now + LIVE_RETRY_SEC;

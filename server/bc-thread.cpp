@@ -1022,10 +1022,8 @@ static int apply_device_cfg(struct bc_record *bc_rec)
 			hls_content *content = bc_rec->hls_stream->get_hls_content(bc_rec->id);
 			if (content != NULL)
 			{
-				hls_config config;
-				config.segment_duration = update->hls_segment_duration;
-				config.segment_size = update->hls_segment_size;
-				config.window_size = update->hls_window_size;
+				hls_config config = hls_config_for_device(update->hls_segment_duration,
+					update->hls_segment_size, update->hls_window_size);
 				content->set_config(&config);
 			}
 		}
