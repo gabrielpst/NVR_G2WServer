@@ -1,5 +1,6 @@
 <?php defined('INDVR') or exit();
-$g2w_v = @filemtime(__DIR__.'/dist/css/entrar.css').'-'.@filemtime(__DIR__.'/dist/js/entrar.js');
+require_once __DIR__.'/../lib/Estatico.php';
+$g2w_v = g2w_v('template/dist/css/entrar.css').'-'.g2w_v('template/dist/js/entrar.js');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">

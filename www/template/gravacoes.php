@@ -1,7 +1,8 @@
 <?php defined('INDVR') or exit();
 $h = array('G2WGestao', 'h');
 $json = json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
-$v = function ($arq) { return intval(@filemtime(SITE_PATH.$arq)); };
+require_once __DIR__.'/../lib/Estatico.php';
+$v = function ($arq) { return g2w_v($arq); };
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -21,7 +22,7 @@ $v = function ($arq) { return intval(@filemtime(SITE_PATH.$arq)); };
     <header class="topo">
         <div class="topo-linha">
             <a class="marca" href="/aovivo" aria-label="<?php echo G2WMarca::h(G2WMarca::nome()); ?> — ao vivo" translate="no">
-                <?php if (G2WMarca::logo()) { echo G2WMarca::logoImg(200, 40, 'logo-marca'); } elseif (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png" alt="G2W Monitor" width="109" height="46"><?php } ?>
+                <?php if (G2WMarca::logo()) { echo G2WMarca::logoImg(200, 40, 'logo-marca'); } elseif (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png?v=<?php echo $v('img/logo.png'); ?>" alt="G2W Monitor" width="109" height="46"><?php } ?>
             </a>
             <div class="topo-acoes">
                 <?php if ($admin) { ?><a class="link-topo" href="/gestao">Painel</a><?php } ?>

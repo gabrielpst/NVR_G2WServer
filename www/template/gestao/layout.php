@@ -9,8 +9,9 @@ $abas = array(
 );
 $com_mapa = !empty($com_mapa);
 $leaflet = '/template/dist/js/vendor/leaflet-1.9.4';
-$v_css = @filemtime(SITE_PATH.'template/dist/css/gestao.css');
-$v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
+require_once __DIR__.'/../../lib/Estatico.php';
+$v_css = g2w_v('template/dist/css/gestao.css');
+$v_js = g2w_v('template/dist/js/gestao.js');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -25,14 +26,14 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     <title><?php echo $h($titulo); ?> · <?php echo G2WMarca::h(G2WMarca::nome()); ?></title>
     <?php if ($com_mapa) { ?><link href="<?php echo $leaflet; ?>/leaflet.css" rel="stylesheet"><?php } ?>
 
-    <link href="/template/dist/css/gestao.css?v=<?php echo intval($v_css); ?>" rel="stylesheet">
+    <link href="/template/dist/css/gestao.css?v=<?php echo $v_css; ?>" rel="stylesheet">
 </head>
 <body data-aba="<?php echo $h($aba); ?>">
     <a class="pular" href="#conteudo">Pular para o conteúdo</a>
     <header class="topo">
         <div class="topo-linha">
             <a class="marca" href="/gestao" aria-label="<?php echo G2WMarca::h(G2WMarca::nome()); ?> — visão geral" translate="no">
-                <?php if (G2WMarca::logo()) { echo G2WMarca::logoImg(200, 40, 'logo-marca'); } elseif (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40" fetchpriority="high"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high"><?php } ?>
+                <?php if (G2WMarca::logo()) { echo G2WMarca::logoImg(200, 40, 'logo-marca'); } elseif (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40" fetchpriority="high"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png?v=<?php echo g2w_v('img/logo.png'); ?>" alt="G2W Monitor" width="109" height="46" fetchpriority="high"><?php } ?>
             </a>
             <div class="topo-acoes">
                 <a class="link-topo" href="/aovivo">Ao vivo</a>
@@ -71,6 +72,6 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     <div id="avisos-flutuantes" class="toasts" role="status" aria-live="polite"></div>
     <?php if ($com_mapa) { ?><script src="<?php echo $leaflet; ?>/leaflet.js" defer></script><?php } ?>
 
-    <script src="/template/dist/js/gestao.js?v=<?php echo intval($v_js); ?>" defer></script>
+    <script src="/template/dist/js/gestao.js?v=<?php echo $v_js; ?>" defer></script>
 </body>
 </html>

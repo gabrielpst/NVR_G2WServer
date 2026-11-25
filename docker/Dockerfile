@@ -88,8 +88,15 @@ RUN git config --global --add safe.directory /build/source \
 # falha como o `git describe` sem --always usado só pro cache de contrib.
 RUN echo "#define GIT_REVISION \"$(git describe --dirty --always --long) $(git describe --all)\"" > server/version.h
 
-# Gera o control real a partir do template pra distro alvo, compila o .deb
-RUN DIST=${DIST} debian/rules debian/control \
+# Gera o control real a partir do template pra distro alvo, compila o .deb.
+# SOURCE_DATE_EPOCH = data do commit compilado. Sem isso o debhelper usa a data
+# da última entrada do debian/changelog (09/07/2025) e o dpkg-deb limita a ela a
+# data de TODO arquivo do pacote, em qualquer build: o nginx mandava o mesmo
+# Last-Modified/ETag (data + tamanho) para um CSS/JS que tinha mudado, e o
+# navegador seguia com o antigo. Com a data do commit, cada versão tem a sua.
+RUN export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" \
+    && echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" \
+    && DIST=${DIST} debian/rules debian/control \
     && DIST=${DIST} debian/rules clean binary \
     && mkdir -p /build/releases \
     && mv -v ../bluecherry*.deb /build/releases/
