@@ -393,8 +393,16 @@ public:
     bool get_auth() { return _auth; }
     bool check_token(const std::string &token, int device_id);
 
+    /* EXT-X-SERVER-CONTROL:HOLD-BACK for a playlist whose longest segment
+     * lasts max_duration seconds; 0 = do not send the tag. */
+    double hold_back(double max_duration) const;
+
 private:
     bool create_socket(uint16_t port);
+
+    /* G2W_HLS_HOLD_BACK_SEGMENTOS / G2W_HLS_HOLD_BACK_MIN (environment) */
+    double          _hold_back_segments = 0.;
+    double          _hold_back_min = 0.;
 
     /* HLS window buffer */
     hls_content_map  _content;

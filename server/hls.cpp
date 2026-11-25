@@ -16,6 +16,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -59,6 +60,8 @@ extern "C" {
 #define HLS_SEGMENT_SIZE            (188 * 7 * 1024)        // Most accepted HLS segment size
 #define HLS_SEGMENT_SIZE_MAX        (188 * 7 * 1024 * 5)    // Maximum allowed segment size
 #define HLS_SEGMENT_DURATION        3.0                     // Most accepted HLS segment duration
+#define HLS_HOLD_BACK_SEGMENTS      2.0                     // HOLD-BACK = this many of the longest segment...
+#define HLS_HOLD_BACK_MIN           3.0                     // ...but never less than this (seconds)
 #define HLS_SEGMENT_DURATION_SLACK  0.1                     // A keyframe this close to the target duration still cuts (camera GOP jitter)
 #define HLS_HEADER_EXPIRE_SEC       2                       // HLS header expiration seconds
 #define HLS_SERVER_CHUNK_MAX        65535                   // RX chunk size to send per one call
@@ -810,6 +813,9 @@ bool hls_session::create_response()
         long target = lround(duration);
         if (target < 1) target = 1;
         std_string_append(body, "#EXT-X-TARGETDURATION:%ld\n", target);
+        double hold_back = _listener->hold_back(duration);
+        if (hold_back > 0.)
+            std_string_append(body, "#EXT-X-SERVER-CONTROL:HOLD-BACK=%.3f\n", hold_back);
         std_string_append(body, "#EXT-X-MEDIA-SEQUENCE:%u\n", sequence);
 
         if (content->_fmp4 && content->have_initial_segment())
@@ -1910,6 +1916,32 @@ int hls_event_callback(void *events, void* data, int reason)
 // HLS LISTENER
 //////////////////////////////////////////////////
 
+/* Number from the environment, or def when unset, invalid or out of range */
+static double env_double(const char *name, double def, double min, double max)
+{
+    const char *v = getenv(name);
+    if (!v || !*v) return def;
+    char *end = NULL;
+    double d = strtod(v, &end);
+    if (end == v || *end || d < min || d > max) {
+        bc_log(Warning, "Ignoring %s=\"%s\" (expected %g to %g)", name, v, min, max);
+        return def;
+    }
+    return d;
+}
+
+/* G2W 2026-11: without HOLD-BACK (or EXT-X-START) players stay 3 target
+ * durations behind the live edge: 15 s with 4 s segments. HOLD-BACK tells
+ * ExoPlayer and hls.js how far behind to play. RFC 8216bis asks for at least
+ * 3 target durations; we go below on purpose, as the measured gain is the
+ * point, keeping a floor so a slow phone still has a segment in hand. */
+double hls_listener::hold_back(double max_duration) const
+{
+    if (_hold_back_segments <= 0. || max_duration <= 0.) return 0.;
+    double hb = _hold_back_segments * max_duration;
+    return hb < _hold_back_min ? _hold_back_min : hb;
+}
+
 hls_listener::hls_listener()
 {
     pthread_mutexattr_t attr;
@@ -1926,6 +1958,11 @@ hls_listener::hls_listener()
     _config.window_size = HLS_WINDOW_SIZE;
     _config.segment_size = HLS_SEGMENT_SIZE;
     _config.segment_duration = HLS_SEGMENT_DURATION;
+
+    _hold_back_segments = env_double("G2W_HLS_HOLD_BACK_SEGMENTOS", HLS_HOLD_BACK_SEGMENTS, 0., 10.);
+    _hold_back_min = env_double("G2W_HLS_HOLD_BACK_MIN", HLS_HOLD_BACK_MIN, 0., 60.);
+    bc_log(Info, "HLS live: HOLD-BACK = max(%.2f x longest segment, %.2f s)%s",
+           _hold_back_segments, _hold_back_min, _hold_back_segments > 0. ? "" : " (disabled)");
 
     _init = true;
 }
