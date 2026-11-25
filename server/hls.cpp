@@ -803,7 +803,13 @@ bool hls_session::create_response()
         /* RFC 8216 4.2: no whitespace between the tag's colon and its value */
         std_string_append(body, "#EXT-X-VERSION:3\n");
         std_string_append(body, "#EXT-X-ALLOW-CACHE:NO\n");
-        std_string_append(body, "#EXT-X-TARGETDURATION:%.f\n", ceil(duration) + 1);
+        /* RFC 8216 4.3.3.1: each EXTINF rounded to the nearest integer must
+         * be <= the target duration. It used to be ceil()+1, and players keep
+         * 3 target durations behind the live edge when the playlist says
+         * nothing else (ExoPlayer, hls.js): the +1 alone cost 3 s of delay. */
+        long target = lround(duration);
+        if (target < 1) target = 1;
+        std_string_append(body, "#EXT-X-TARGETDURATION:%ld\n", target);
         std_string_append(body, "#EXT-X-MEDIA-SEQUENCE:%u\n", sequence);
 
         if (content->_fmp4 && content->have_initial_segment())
