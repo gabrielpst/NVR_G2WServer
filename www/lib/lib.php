@@ -487,6 +487,9 @@ class user{
 		}
 	}
 	private function userStatus($type){
+		// G2W 2026-11, "um aparelho por vez": cookie de uma sessão que já foi
+		// substituída continua recebendo a resposta própria, em qualquer rota
+		if (empty($_SESSION['id']) && !empty($_SESSION['g2w_substituida'])) G2WGestao::sessaoRecusar();
 		if (empty($_SESSION['id'])) {
 			if ($type == 'basic'){
 				if (!$this->basicAuthCheck()) return false;

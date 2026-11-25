@@ -33,6 +33,8 @@ class mapa extends Controller
     {
         // Sem sessão a resposta é um JSON com 401 — o redirecionamento para
         // /login que o chAccess() faz serve a páginas, não ao aplicativo.
+        // cookie de sessão substituída ("um aparelho por vez"): resposta própria
+        if (empty($_SESSION['id']) && !empty($_SESSION['g2w_substituida'])) G2WGestao::sessaoRecusar();
         if (empty($_SESSION['id'])) {
             $this->json(array('ok' => false, 'erro' => 'Sessão ausente ou expirada. Entre de novo.'), 401);
         }

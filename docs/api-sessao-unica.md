@@ -65,14 +65,14 @@ Content-Type: application/json; charset=utf-8
 ```
 
 - É sempre 401 com o cabeçalho `X-G2W-Sessao: substituida`. Não é o `302` para `/login` da sessão expirada nem o `401` com `WWW-Authenticate` da falta de credencial: dá para distinguir só pelo cabeçalho.
-- A sessão do aparelho desligado é encerrada no servidor nesse pedido.
+- A sessão do aparelho desligado é esvaziada no servidor nesse pedido, mas o cookie dela continua marcado: **todo pedido seguinte com o mesmo cookie recebe de novo este 401**, em qualquer rota, inclusive os que já estavam a caminho em paralelo. Ele não vira o `302` de sessão expirada. A marca some quando esse cookie faz um login novo ou quando a sessão expira por tempo.
 - O vídeo ao vivo que estava tocando para em até 15 segundos: o endereço com `?authtoken=` deixa de ser aceito (401 do próprio servidor de vídeo, sem o corpo acima). Ao pedir um endereço novo em `/media/hls`, vem o 401 acima.
 - **O aplicativo deve:** parar os pedidos, mostrar "Sua conta foi acessada em outro aparelho" e voltar para a tela de entrada. **Não refazer o login sozinho**: um login novo toma a vez de volta e desliga o outro aparelho; dois aparelhos fazendo isso se derrubam sem parar. O login novo só acontece quando a pessoa toca em entrar.
 - No site, a página vai para `/login?motivo=outro-aparelho` e mostra a mesma frase.
 
 ## Pedidos com Basic (sem cookie)
 
-`/media/request.php` (miniatura, quadro e arquivo de gravação), `/media/trecho`, `/media/hls` e `/events/` aceitam HTTP Basic sem sessão. Com a regra ligada e usuário comum:
+`/media/request.php` (miniatura, quadro e arquivo de gravação), `/media/trecho`, `/media/hls` e `/media/sessao` aceitam HTTP Basic sem sessão. (`/events/`, `/devices.php` e `/mapa/…` **não** aceitam Basic sozinho: sem cookie de sessão respondem `302` para `/login`, como sempre.) Com a regra ligada e usuário comum:
 
 | Pedido | Dono atual | Resposta |
 |---|---|---|
@@ -83,6 +83,14 @@ Content-Type: application/json; charset=utf-8
 | sem cabeçalho | nenhum, ou um cliente sem identificação | atendido |
 
 A última linha é a limitação dos clientes antigos, explicada abaixo.
+
+## Perguntar se ainda sou o aparelho da vez
+
+`GET /media/sessao`, com o cookie de sessão **ou** com Basic + `X-G2W-Aparelho`. Não devolve dado de câmera; serve para o aplicativo decidir antes de qualquer login automático.
+
+- Sou o dono (ou a regra não vale para mim): `200` com `{"ok": true, "sessao_unica": true|false, "aparelho_reconhecido": true|false}`.
+- Outro aparelho é o dono: o `401` `sessao_substituida` acima.
+- Com Basic e senha errada: `302` para `/login` (herdado do servidor).
 
 ## Sair
 

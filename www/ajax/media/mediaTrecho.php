@@ -35,6 +35,8 @@ class mediaTrecho extends Controller
     {
         parent::__construct();
         // Sem sessão e sem Basic: 401 em JSON, com o desafio Basic de sempre.
+        // cookie de sessão substituída ("um aparelho por vez"): resposta própria
+        if (empty($_SESSION['id']) && !empty($_SESSION['g2w_substituida'])) G2WGestao::sessaoRecusar();
         if (empty($_SESSION['id']) && !isset($_SERVER['PHP_AUTH_USER'])) {
             header('WWW-Authenticate: Basic realm="G2W Monitor"');
             $this->erro(401, 'Entre com usuário e senha.');

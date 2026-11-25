@@ -216,7 +216,7 @@ class G2WGestao
     public static function sessaoAssumir($userId, $admin, $peloApp)
     {
         try {
-            unset($_SESSION['g2w_dono']);
+            unset($_SESSION['g2w_dono'], $_SESSION['g2w_substituida'], $_SESSION['g2w_substituida_app']);
             if ($admin || !self::sessaoUnicaLigada() || !self::garantirTabelas()) return;
             $userId = intval($userId);
             $h = self::aparelhoDoPedido();
@@ -261,10 +261,13 @@ class G2WGestao
     /* Resposta ao aparelho que deixou de ser o dono. Encerra a sessão dele. */
     public static function sessaoRecusar()
     {
-        $pelo_app = !empty($_SESSION['from_client']);
+        $pelo_app = !empty($_SESSION['from_client']) || !empty($_SESSION['g2w_substituida_app']);
+        // A sessão perde tudo, menos a marca: os próximos pedidos com este
+        // mesmo cookie (inclusive os que já estavam a caminho, em paralelo)
+        // recebem esta mesma resposta, e não o redirecionamento de sessão
+        // expirada, que faria o aplicativo antigo refazer o login sozinho.
         if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION = array();
-            session_destroy();
+            $_SESSION = array('g2w_substituida' => 1, 'g2w_substituida_app' => $pelo_app ? 1 : 0);
         }
         $aceita = isset($_SERVER['HTTP_ACCEPT']) ? (string)$_SERVER['HTTP_ACCEPT'] : '';
         $metodo = isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET';
