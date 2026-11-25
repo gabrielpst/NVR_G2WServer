@@ -152,7 +152,6 @@
 
         $$('[data-form-camera]').forEach(function (form) {
             var salvo = vigiar(form);
-            var gravAntes = form.elements.gravacao.value;
             var fonteAntes = form.elements.fonte && !form.elements.fonte.readOnly ? form.elements.fonte.value.trim() : null;
             form.addEventListener('submit', function (ev) {
                 ev.preventDefault();
@@ -167,20 +166,12 @@
                     gravacao: form.elements.gravacao.value
                 };
                 if (fonteAntes !== null) dados.fonte = form.elements.fonte.value.trim();
-                // Na versão atual do gravador, parar a gravação de uma câmera ou
-                // trocar o endereço dela faz o gravador inteiro reiniciar.
-                var reinicia = (dados.gravacao === 'nunca' && gravAntes !== 'nunca') || (fonteAntes !== null && dados.fonte !== fonteAntes);
-                var segue = reinicia
-                    ? confirmar('Esta mudança faz o gravador reiniciar: todas as câmeras ficam fora do ar por cerca de 1 minuto. Salvar agora?', 'Salvar e reiniciar')
-                    : Promise.resolve(true);
-                segue.then(function (sim) {
-                    if (!sim) return;
+                Promise.resolve(true).then(function () {
                     ocupado(botao, true);
                     enviar('camera', dados).then(function (r) {
                         ocupado(botao, false);
                         if (r.ok) {
                             aviso(nome + ': ' + r.msg);
-                            gravAntes = dados.gravacao;
                             if (fonteAntes !== null) fonteAntes = dados.fonte;
                             salvo();
                         } else { aviso(r.erro, 'erro'); }

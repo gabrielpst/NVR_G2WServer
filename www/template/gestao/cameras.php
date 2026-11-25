@@ -244,7 +244,7 @@ foreach ($cams as $c) $locais_json[] = array('id' => $c['id'], 'nome' => $c['nom
 <dialog id="dlg-remover" class="dialogo" aria-labelledby="dlg-remover-t">
     <form method="dialog" data-form-remover autocomplete="off" novalidate>
         <h2 id="dlg-remover-t">Remover câmera</h2>
-        <p>A câmera sai do painel e do aplicativo e para de gravar. As outras câmeras continuam funcionando normalmente.</p>
+        <p>A câmera sai do painel e do aplicativo e para de gravar.</p>
         <fieldset class="opcoes" id="r-opcoes">
             <legend>O que fazer com as gravações dela (<span id="r-guardado"></span>)</legend>
             <label class="opcao"><input type="radio" name="gravacoes" value="guardar" checked> Guardar as gravações</label>

@@ -416,6 +416,98 @@ class G2WGestao
         return $c;
     }
 
+    /* Endereço de câmera em campos separados: host, porta, caminho, usuario,
+     * senha. Devolve o conjunto normalizado ou lança InvalidArgumentException
+     * com texto para a tela. A senha nunca entra em mensagem. */
+    public static function enderecoCamera($e)
+    {
+        $host = self::hostCamera(isset($e['host']) ? $e['host'] : null);
+        if ($host === null) throw new InvalidArgumentException('Endereço da câmera inválido. Use o número IP (exemplo: 192.168.1.50) ou o nome dela na rede, sem rtsp:// e sem barras.');
+        $porta = isset($e['porta']) ? $e['porta'] : null;
+        if (is_string($porta) && preg_match('/^\d{1,5}$/', $porta)) $porta = intval($porta);
+        if (!is_int($porta) || $porta < 1 || $porta > 65535) throw new InvalidArgumentException('Porta RTSP inválida: informe um número de 1 a 65535 (o comum é 554).');
+        $caminho = self::caminhoRtsp(isset($e['caminho']) ? $e['caminho'] : null);
+        if ($caminho === null) throw new InvalidArgumentException('Caminho do vídeo inválido. Exemplo: /cam/realmonitor?channel=1&subtype=0. Não pode ter espaço, aspas nem a barra vertical.');
+        $usuario = isset($e['usuario']) ? $e['usuario'] : '';
+        $senha = isset($e['senha']) ? $e['senha'] : '';
+        if (!is_string($usuario) || !is_string($senha)) throw new InvalidArgumentException('Usuário ou senha da câmera inválidos.');
+        $usuario = trim($usuario);
+        if (strlen($usuario) > 64 || preg_match('/[\s<>"\'\\\\\x00-\x1f\x7f]/', $usuario)) throw new InvalidArgumentException('O usuário da câmera tem caractere não permitido (espaço, < > aspas ou barra invertida) ou passa de 64 caracteres.');
+        if (strlen($senha) > 128 || !mb_check_encoding($senha, 'UTF-8') || preg_match('/[\x00-\x1f\x7f]/', $senha)) throw new InvalidArgumentException('A senha da câmera passa de 128 caracteres ou tem caractere de controle.');
+        if ($usuario === '' && $senha !== '') throw new InvalidArgumentException('Informe o usuário da câmera junto com a senha.');
+        $device = $host.'|'.$porta.'|'.$caminho;
+        if (strlen($device) > 256) throw new InvalidArgumentException('Endereço da câmera longo demais.');
+        return array('host' => $host, 'porta' => $porta, 'caminho' => $caminho, 'usuario' => $usuario, 'senha' => $senha, 'device' => $device);
+    }
+
+    /* Nome de câmera: recusa < > " ' \ e caracteres de controle (o painel
+     * original imprime o nome sem escapar). */
+    public static function nomeCamera($v)
+    {
+        if (!is_string($v)) throw new InvalidArgumentException('O nome da câmera é inválido.');
+        $v = trim($v);
+        if ($v === '') throw new InvalidArgumentException('O nome da câmera não pode ficar em branco.');
+        if (mb_strlen($v) > 100) throw new InvalidArgumentException('O nome da câmera pode ter no máximo 100 caracteres.');
+        if (!mb_check_encoding($v, 'UTF-8') || preg_match('/[<>"\'\\\\\x00-\x1f\x7f]/', $v)) {
+            throw new InvalidArgumentException('O nome da câmera tem caractere não permitido (< > aspas ou barra invertida).');
+        }
+        return $v;
+    }
+
+    /* Cria uma câmera RTSP. É a única porta de entrada: a tela "Adicionar
+     * câmera" e o importador (tools/importar-cameras.php) chamam aqui.
+     *
+     * $e: nome, host, porta, caminho, usuario, senha, retencao_dias (ou null),
+     *     gravacao (padrao|sempre|nunca), gravar_som, modelo (id da base
+     *     local, opcional), desativada, local {latitude, longitude, endereco}.
+     * Mesmas colunas e padrões do cadastro do modo avançado
+     * (ipCamera::create), com consulta parametrizada. O motor acha a linha
+     * nova sozinho, na conferência periódica dele. Devolve o id; entrada
+     * recusada vira InvalidArgumentException com texto para a tela. */
+    public static function criarCamera($e)
+    {
+        if (!is_array($e)) throw new InvalidArgumentException('Pedido inválido.');
+        $nome = self::nomeCamera(isset($e['nome']) ? $e['nome'] : '');
+        $a = self::enderecoCamera($e);
+        if (self::q("SELECT id FROM Devices WHERE device_name=?", 's', array($nome))) throw new InvalidArgumentException('Já existe outra câmera com esse nome.');
+        if (self::q("SELECT id FROM Devices WHERE device=?", 's', array($a['device']))) throw new InvalidArgumentException('Outra câmera já usa esse endereço.');
+
+        $ret = isset($e['retencao_dias']) ? $e['retencao_dias'] : null;
+        if ($ret === '') $ret = null;
+        if ($ret !== null) {
+            if (!is_numeric($ret) || intval($ret) != $ret || $ret < 1 || $ret > 3650) throw new InvalidArgumentException('Dias guardados: informe um número de 1 a 3650, ou deixe em branco.');
+            $ret = intval($ret);
+        }
+        $grav = isset($e['gravacao']) ? (string)$e['gravacao'] : 'padrao';
+        if (!in_array($grav, array('padrao', 'sempre', 'nunca'), true)) throw new InvalidArgumentException('Opção de gravação inválida.');
+        $som = !empty($e['gravar_som']);
+
+        $modelo = 'Generic';
+        if (isset($e['modelo']) && is_string($e['modelo']) && $e['modelo'] !== '') {
+            if (strlen($e['modelo']) > 100 || !self::modeloExiste($e['modelo'])) throw new InvalidArgumentException('Modelo de câmera desconhecido.');
+            $modelo = $e['modelo'];
+        }
+
+        $local = null;
+        if (isset($e['local']) && is_array($e['local'])) {
+            list($lat, $lon) = self::coordenada(isset($e['local']['latitude']) ? $e['local']['latitude'] : null, isset($e['local']['longitude']) ? $e['local']['longitude'] : null);
+            $local = array($lat, $lon, self::endereco(isset($e['local']['endereco']) ? $e['local']['endereco'] : ''));
+        }
+
+        self::q("INSERT INTO Devices (device_name, protocol, device, driver, rtsp_username, rtsp_password, resolutionX, resolutionY,
+                mjpeg_path, model, rtsp_rtp_prefer_tcp, onvif_port, substream_path, hls_window_size, hls_segment_size, hls_segment_duration,
+                max_age_days, audio_disabled, schedule_override_global, schedule, disabled)
+            VALUES (?, 'IP-RTSP', ?, '', ?, ?, 640, 480, ?, ?, 1, 80, ?, 5, 0, 0, ?, ?, ?, ?, ?)",
+            'sssssssiiisi', array($nome, $a['device'], $a['usuario'], $a['senha'], $a['host'].'||', $modelo, $a['host'].'|'.$a['porta'].'|',
+                $ret, $som ? 0 : 1, ($grav !== 'padrao') ? 1 : 0, str_repeat($grav === 'nunca' ? 'N' : 'C', 168), empty($e['desativada']) ? 0 : 1));
+        $novo = self::q("SELECT id FROM Devices WHERE device_name=?", 's', array($nome));
+        if (!$novo) throw new RuntimeException('camera nao gravada');
+        $id = intval($novo[0]['id']);
+        self::removerLocal($id);   // id reaproveitado depois de restauração de banco não herda posição antiga
+        if ($local) self::salvarLocal($id, $local[0], $local[1], $local[2]);
+        return $id;
+    }
+
     /* Abre o vídeo da câmera por RTSP e diz o que veio. Nunca devolve texto
      * da câmera nem do ffprobe: só categorias e os campos conferidos abaixo.
      *
