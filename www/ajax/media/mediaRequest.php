@@ -10,9 +10,36 @@ class mediaRequest extends Controller {
 		$this->chAccess('basic');
     }
 
+    /* G2W 2026-11: com Basic (app e desktop) e com cookie, esta rota só
+     * olhava se a câmera estava liberada. Passou a olhar também, como o
+     * /media/trecho: usuário desativado (sem site e sem aplicativo) não
+     * recebe nada, e gravação (arquivo e foto de gravação) exige o direito
+     * "Gravações" (access_backup). A miniatura do ao vivo (livesnapshot) não
+     * exige "Gravações": é ao vivo. Administrador passa sempre. */
+    private function negado($motivo)
+    {
+        header('HTTP/1.1 403 Forbidden');
+        die('<error>'.$motivo.'</error>');
+    }
+
+    private function exigirAtivo()
+    {
+        $u = $this->user->info;
+        if (!intval($u['access_setup']) && !intval($u['access_web']) && !intval($u['access_remote']))
+            $this->negado('E: user is disabled');
+    }
+
+    private function exigirGravacoes()
+    {
+        $u = $this->user->info;
+        if (!intval($u['access_setup']) && !intval($u['access_backup']))
+            $this->negado('E: no permission for recordings');
+    }
+
     public function getData()
     {
         session_write_close();
+        $this->exigirAtivo();
 
         #live snapshot API — quadro recente da câmera (atualizado pelo
         # snapshot-updater a cada ~2min), independente de gravação. É o que a
@@ -46,6 +73,7 @@ class mediaRequest extends Controller {
 
         #screenshot API
         if (!empty($_GET['mode']) && $_GET['mode']=='screenshot'){
+            $this->exigirGravacoes();
 	
         	$device_id = (!empty($_GET['device_id'])) ? intval($_GET['device_id']) : false;
         	$event_id = (!empty($_GET['id'])) ? intval($_GET['id']) : false;
@@ -68,6 +96,8 @@ class mediaRequest extends Controller {
         	readfile($path_to_image);
         	exit();
         }
+
+        $this->exigirGravacoes();
 
         if (empty($_GET['id']))
         	requestError('No ID sent');
