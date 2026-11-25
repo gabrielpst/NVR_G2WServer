@@ -66,6 +66,9 @@ small { color: var(--texto-2); font-size: .8125rem; line-height: 1.4; }
 }
 .marca { display: inline-flex; border-radius: 8px; }
 .marca img { height: 40px; width: auto; }
+/* marca própria da instalação (lib/Marca.php): ícone + nome em texto no lugar do logotipo */
+.marca { align-items: center; gap: 10px; text-decoration: none; }
+.marca-nome { color: var(--texto); font-weight: 700; font-size: 1.125rem; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
 .topo-acoes { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .link-topo {
   color: var(--texto); text-decoration: none; padding: 10px 12px; border-radius: 8px;

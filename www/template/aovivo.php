@@ -12,7 +12,7 @@ $v = function ($arq) { return intval(@filemtime(SITE_PATH.$arq)); };
     <meta name="color-scheme" content="light">
     <meta name="theme-color" content="#FFFFFF">
     <link rel="icon" href="/favicon.ico">
-    <title>Ao vivo · G2W Monitor</title>
+    <title>Ao vivo · <?php echo G2WMarca::h(G2WMarca::nome()); ?></title>
     <link href="/template/dist/css/gestao.css?v=<?php echo $v('template/dist/css/gestao.css'); ?>" rel="stylesheet">
     <link href="/template/dist/css/aovivo.css?v=<?php echo $v('template/dist/css/aovivo.css'); ?>" rel="stylesheet">
 </head>
@@ -20,8 +20,8 @@ $v = function ($arq) { return intval(@filemtime(SITE_PATH.$arq)); };
     <a class="pular" href="#conteudo">Pular para o conteúdo</a>
     <header class="topo">
         <div class="topo-linha">
-            <a class="marca" href="/aovivo" aria-label="G2W Monitor — ao vivo" translate="no">
-                <img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high">
+            <a class="marca" href="/aovivo" aria-label="<?php echo G2WMarca::h(G2WMarca::nome()); ?> — ao vivo" translate="no">
+                <?php if (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40" fetchpriority="high"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high"><?php } ?>
             </a>
             <div class="topo-acoes">
                 <?php if ($admin) { ?><a class="link-topo" href="/gestao">Painel</a><?php } ?>

@@ -42,6 +42,22 @@ No compose de produção, dar ao `bc-server` `stop_grace_period: 30s`: na parada
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Marca por instalação (branch `marca-2026-11`, 2026-11-24, ainda sem build)
+
+Cada cliente roda a mesma imagem na sua LXC; o nome mostrado nas telas pode ser trocado por instalação, sem imagem própria.
+
+- **Arquivo opcional `/etc/g2w/marca.json`**, fora do `www`, montado pelo compose (somente leitura, legível pelo usuário `www-data`):
+
+  ```json
+  { "nome": "Ksolucoes" }
+  ```
+
+  Campos, todos opcionais: `nome` (até 40 caracteres), `subtitulo` (até 80; a frase sob o nome na tela de entrada), `rodape` (até 60; o rodapé das telas de entrada) e `icone` (caminho de imagem dentro de `/img/`, ex.: `/img/arquivo.png`).
+- **Sem o arquivo, tudo sai como sempre** ("G2W Monitor"). JSON inválido, arquivo maior que 4 KB, sem permissão de leitura ou campo fora do formato: vale o padrão daquele campo, sem quebrar a tela. O valor é escapado na saída.
+- **Onde o nome aparece**: título da aba e nome na tela de entrada (`/login`), título da aba em `/changepwd`, e em `/gestao` e `/aovivo` o título da aba, o cabeçalho e o rodapé. Com nome próprio, o cabeçalho de `/gestao` e `/aovivo` mostra o ícone e o nome em texto no lugar do logotipo "G2W Monitor" (que é uma imagem).
+- **Onde não muda**: o que o aplicativo lê (realm do Basic, mensagens, nome do arquivo de trecho baixado), o painel antigo em `/monitor`, o favicon.
+- Código: `www/lib/Marca.php` (classe `G2WMarca`).
+
 ### Baixar trecho de gravação por horário (branch `trecho-2026-11`, 2026-11-24, ainda sem build)
 
 - **`GET /media/trecho?id=<câmera>&inicio=<epoch>&fim=<epoch>`**: junta, sem recodificar, os arquivos gravados (~5 min cada) que cobrem a janela e devolve um MP4 só, de até 20 minutos. É a rota que o aplicativo usa para "baixar das 13h03 às 13h21". Contrato em [`docs/api-trecho-gravacao.md`](docs/api-trecho-gravacao.md).

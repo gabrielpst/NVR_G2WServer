@@ -35,7 +35,7 @@ class gestao extends Controller
             if ($this->pedidoApi) $this->falha(500, 'O servidor não conseguiu concluir o pedido. Tente de novo em instantes.');
             http_response_code(500);
             header('Content-Type: text/html; charset=utf-8');
-            return '<!DOCTYPE html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>G2W Monitor</title>'
+            return '<!DOCTYPE html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'.G2WMarca::h(G2WMarca::nome()).'</title>'
                 .'<body style="font:16px system-ui,sans-serif;margin:40px auto;max-width:520px;padding:0 16px"><h1>O painel não conseguiu carregar</h1>'
                 .'<p>Pode ser uma falha momentânea do banco de dados. <a href="">Tente de novo</a> ou abra o <a href="/monitor">modo avançado</a>.</p></body></html>';
         }

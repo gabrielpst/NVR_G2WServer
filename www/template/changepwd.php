@@ -9,14 +9,14 @@ $g2w_v = @filemtime(__DIR__.'/dist/css/entrar.css').'-'.@filemtime(__DIR__.'/dis
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#0A1F1A">
     <link rel="icon" href="/favicon.ico">
-    <link rel="apple-touch-icon" href="/img/icone-g2w.png">
-    <title>Nova senha · G2W Monitor</title>
+    <link rel="apple-touch-icon" href="<?php echo G2WMarca::h(G2WMarca::icone()); ?>">
+    <title>Nova senha · <?php echo G2WMarca::h(G2WMarca::nome()); ?></title>
     <link href="/template/dist/css/entrar.css?v=<?php echo $g2w_v; ?>" rel="stylesheet">
 </head>
 <body>
     <main class="entrar">
         <div class="entrar-marca">
-            <img src="/img/icone-g2w.png" alt="" width="76" height="76">
+            <img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="76" height="76">
             <h1>Crie sua senha</h1>
             <p>No primeiro acesso é preciso trocar a senha recebida</p>
         </div>
@@ -45,7 +45,7 @@ $g2w_v = @filemtime(__DIR__.'/dist/css/entrar.css').'-'.@filemtime(__DIR__.'/dis
         </form>
     </main>
 
-    <p class="entrar-rodape">G2W Tecnologia</p>
+    <p class="entrar-rodape"><?php echo G2WMarca::h(G2WMarca::rodape()); ?></p>
 
     <script src="/template/dist/js/entrar.js?v=<?php echo $g2w_v; ?>"></script>
 </body>

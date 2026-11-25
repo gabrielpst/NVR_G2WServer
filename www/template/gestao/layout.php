@@ -22,7 +22,7 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     <meta name="theme-color" content="#FFFFFF">
     <meta name="g2w-csrf" content="<?php echo $h($csrf); ?>">
     <link rel="icon" href="/favicon.ico">
-    <title><?php echo $h($titulo); ?> · G2W Monitor</title>
+    <title><?php echo $h($titulo); ?> · <?php echo G2WMarca::h(G2WMarca::nome()); ?></title>
     <?php if ($com_mapa) { ?><link href="<?php echo $leaflet; ?>/leaflet.css" rel="stylesheet"><?php } ?>
 
     <link href="/template/dist/css/gestao.css?v=<?php echo intval($v_css); ?>" rel="stylesheet">
@@ -31,8 +31,8 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     <a class="pular" href="#conteudo">Pular para o conteúdo</a>
     <header class="topo">
         <div class="topo-linha">
-            <a class="marca" href="/gestao" aria-label="G2W Monitor — visão geral" translate="no">
-                <img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high">
+            <a class="marca" href="/gestao" aria-label="<?php echo G2WMarca::h(G2WMarca::nome()); ?> — visão geral" translate="no">
+                <?php if (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40" fetchpriority="high"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high"><?php } ?>
             </a>
             <div class="topo-acoes">
                 <a class="link-topo" href="/aovivo">Ao vivo</a>
@@ -53,7 +53,7 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     </main>
 
     <footer class="rodape">
-        <span>G2W Monitor · atualizado às <time id="hora-pagina" datetime="<?php echo date('c', $agora); ?>"><?php echo date('H:i', $agora); ?></time></span>
+        <span><?php echo G2WMarca::h(G2WMarca::nome()); ?> · atualizado às <time id="hora-pagina" datetime="<?php echo date('c', $agora); ?>"><?php echo date('H:i', $agora); ?></time></span>
         <a href="/monitor">Abrir o modo avançado</a>
     </footer>
 
