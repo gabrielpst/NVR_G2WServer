@@ -651,6 +651,8 @@
         return f.format(lat) + ' ; ' + f.format(lon);
     }
 
+    var escolherLocal = null;   // definida por iniciarLocalizacao()
+
     function iniciarLocalizacao() {
         var bruto = $('#dados-locais');
         var dlg = $('#dlg-local');
@@ -684,8 +686,14 @@
             coord.textContent = 'Nenhum ponto marcado ainda.';
         }
 
-        function abrirLocal(id) {
-            atual = porId[id];
+        // Cadastro de câmera nova: o mesmo diálogo, mas a posição volta para o
+        // formulário (ainda não há câmera para gravar).
+        escolherLocal = function (nome, local, aoEscolher) {
+            abrirLocal(null, { id: null, nome: nome || 'câmera nova', local: local, aoEscolher: aoEscolher });
+        };
+
+        function abrirLocal(id, avulso) {
+            atual = avulso || porId[id];
             if (!atual) return;
             form.reset();
             lista.hidden = true;
@@ -771,6 +779,11 @@
             var p = marcador.getLatLng();
             var botao = $('button[type="submit"]', form);
             ocupado(botao, true);
+            if (atual.id === null) {
+                atual.aoEscolher({ latitude: p.lat, longitude: p.lng, endereco: campo.value.trim() });
+                dlg.close();
+                return;
+            }
             enviar('camera-local', { id: atual.id, latitude: p.lat, longitude: p.lng, endereco: campo.value.trim() }).then(function (r) {
                 ocupado(botao, false);
                 if (!r.ok) { erroForm(form, r.erro); return; }
@@ -781,6 +794,7 @@
         });
         botaoRemover.addEventListener('click', function () {
             if (!atual) return;
+            if (atual.id === null) { atual.aoEscolher(null); dlg.close(); return; }
             confirmar('Remover a localização de ' + atual.nome + '? A câmera some do mapa do painel e do aplicativo.', 'Remover').then(function (sim) {
                 if (!sim) return;
                 enviar('camera-local', { id: atual.id, remover: true }).then(function (r) {
@@ -798,6 +812,261 @@
         });
         var m = /local=(\d+)/.exec(window.location.hash);
         if (m && porId[m[1]]) abrirLocal(parseInt(m[1], 10));
+    }
+
+    // ------------------------------------ cadastro e remoção de câmera
+    function mostrarTeste(caixa, t, erro) {
+        caixa.textContent = '';
+        caixa.className = 'resultado-teste';
+        if (erro) {
+            caixa.classList.add('teste-falha');
+            caixa.appendChild(el('p', { text: erro }));
+        } else if (t === null) {
+            caixa.appendChild(el('p', { text: 'Testando… pode levar até 15 segundos.' }));
+        } else {
+            caixa.classList.add(!t.conectou ? 'teste-falha' : (t.avisos.length ? 'teste-atencao' : 'teste-ok'));
+            caixa.appendChild(el('p', {}, [el('strong', { text: t.texto })]));
+            (t.avisos || []).forEach(function (a) { caixa.appendChild(el('p', { class: 'teste-aviso', text: a })); });
+        }
+        caixa.hidden = false;
+    }
+    function testar(botao, caixa, dados) {
+        ocupado(botao, true, 'Testando…');
+        mostrarTeste(caixa, null);
+        return enviar('camera-testar', dados).then(function (r) {
+            ocupado(botao, false);
+            if (r.ok) mostrarTeste(caixa, r.teste); else mostrarTeste(caixa, null, r.erro);
+            return r;
+        });
+    }
+
+    function iniciarCadastro() {
+        var dlg = $('#dlg-nova');
+        if (!dlg) return;
+        var form = $('form', dlg), f = form.elements;
+        var caixa = $('#n-teste'), textoLocal = $('#n-local-texto'), botaoLocal = $('#n-local');
+        var local = null, caminhoPosto = '', sujo = false;
+
+        function limpar() {
+            form.reset();
+            local = null;
+            caminhoPosto = '';
+            sujo = false;
+            semModelo();
+            caixa.hidden = true;
+            refletirLocal();
+        }
+        function semModelo() {
+            f.modelo.textContent = '';
+            f.modelo.appendChild(el('option', { value: '', text: 'Não precisa escolher' }));
+            f.modelo.disabled = true;
+        }
+        function refletirLocal() {
+            textoLocal.textContent = local ? (local.endereco || 'Ponto marcado, sem endereço escrito') : 'Não definida';
+            botaoLocal.textContent = local ? 'Ajustar' : 'Definir';
+        }
+        // o atalho só troca o caminho se o campo estiver vazio ou ainda com o que um atalho pôs
+        function porCaminho(c) {
+            if (f.caminho.value.trim() === '' || f.caminho.value === caminhoPosto) { f.caminho.value = c; caminhoPosto = c; }
+        }
+        function endereco() {
+            return {
+                host: f.host.value.trim(),
+                porta: f.porta.value.trim() === '' ? 554 : Number(f.porta.value),
+                usuario: f.usuario.value.trim(),
+                senha: f.senha.value,
+                caminho: f.caminho.value.trim()
+            };
+        }
+        function conferir(comNome) {
+            if (comNome && !f.nome.value.trim()) { erroForm(form, 'Dê um nome para a câmera.'); f.nome.focus(); return false; }
+            if (!f.host.value.trim()) { erroForm(form, 'Informe o endereço IP ou o nome da câmera na rede.'); f.host.focus(); return false; }
+            if (!f.caminho.value.trim()) { erroForm(form, 'Informe o caminho do vídeo, ou escolha o fabricante e o modelo para preencher.'); f.caminho.focus(); return false; }
+            erroForm(form, '');
+            return true;
+        }
+
+        $('#abrir-nova').addEventListener('click', function () {
+            limpar();
+            abrir(dlg);
+            focoInicial(f.nome);
+        });
+        form.addEventListener('input', function () { sujo = true; });
+        dlg.addEventListener('cancel', function (ev) {
+            // Esc com formulário preenchido: não joga fora o que foi digitado sem perguntar
+            if (sujo && !window.confirm('Sair sem adicionar a câmera? O que você preencheu será perdido.')) ev.preventDefault();
+        });
+
+        f.fabricante.addEventListener('change', function () {
+            var op = f.fabricante.options[f.fabricante.selectedIndex];
+            semModelo();
+            if (op.value === '') return;
+            if (op.value === 'atalho') { porCaminho(op.getAttribute('data-caminho')); return; }
+            f.modelo.textContent = '';
+            f.modelo.appendChild(el('option', { value: '', text: 'Carregando…' }));
+            f.modelo.disabled = false;
+            fetch('/gestao/modelos?fabricante=' + encodeURIComponent(op.value), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (r) { if (r.status === 401) window.location.href = '/login'; return r.json(); })
+                .then(function (j) {
+                    f.modelo.textContent = '';
+                    if (!j.ok || !j.modelos.length) {
+                        f.modelo.appendChild(el('option', { value: '', text: 'Sem modelos conhecidos: digite o caminho' }));
+                        return;
+                    }
+                    f.modelo.appendChild(el('option', { value: '', text: 'Escolha o modelo' }));
+                    j.modelos.forEach(function (m) {
+                        f.modelo.appendChild(el('option', { value: m.id, text: m.modelo, 'data-caminho': m.caminho }));
+                    });
+                })
+                .catch(function () {
+                    f.modelo.textContent = '';
+                    f.modelo.appendChild(el('option', { value: '', text: 'Não foi possível carregar: digite o caminho' }));
+                });
+        });
+        f.modelo.addEventListener('change', function () {
+            var op = f.modelo.options[f.modelo.selectedIndex];
+            if (op && op.value !== '') porCaminho(op.getAttribute('data-caminho'));
+        });
+
+        $('#n-testar').addEventListener('click', function () {
+            if (!conferir(false)) return;
+            testar(this, caixa, endereco());
+        });
+
+        botaoLocal.addEventListener('click', function () {
+            if (!escolherLocal) return;
+            escolherLocal(f.nome.value.trim(), local, function (novo) { local = novo; sujo = true; refletirLocal(); });
+        });
+
+        form.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            if (!conferir(true)) return;
+            var dados = endereco();
+            dados.nome = f.nome.value.trim();
+            dados.retencao_dias = f.retencao_dias.value.trim() === '' ? null : Number(f.retencao_dias.value);
+            dados.gravacao = f.gravacao.value;
+            dados.gravar_som = f.gravar_som.checked;
+            if (!f.modelo.disabled && f.modelo.value) dados.modelo = f.modelo.value;
+            if (local) dados.local = local;
+            var botao = $('button[type="submit"]', form);
+            ocupado(botao, true, 'Adicionando…');
+            enviar('camera-nova', dados).then(function (r) {
+                ocupado(botao, false);
+                if (!r.ok) { erroForm(form, r.erro); return; }
+                f.senha.value = '';
+                sujo = false;
+                pendente = false;
+                try { sessionStorage.setItem('g2w-aviso', dados.nome + ': ' + r.msg); } catch (e) { /* sem armazenamento: só não mostra o aviso */ }
+                window.location.hash = 'camera-' + r.id;
+                window.location.reload();
+            });
+        });
+
+        // aviso deixado antes de recarregar a página
+        try {
+            var deixado = sessionStorage.getItem('g2w-aviso');
+            if (deixado) { sessionStorage.removeItem('g2w-aviso'); aviso(deixado); }
+        } catch (e) { /* idem */ }
+        var m = /^#camera-(\d+)$/.exec(window.location.hash);
+        var alvo = m && $('[data-form-camera][data-id="' + m[1] + '"]');
+        if (alvo) alvo.scrollIntoView({ block: 'center' });
+    }
+
+    function iniciarRemocao() {
+        var dlg = $('#dlg-remover');
+        if (!dlg) return;
+        var form = $('form', dlg), botao = $('button[type="submit"]', form), andamento = $('#r-andamento');
+        var atual = null, trabalhando = false;
+
+        function rotulo() {
+            botao.textContent = (atual && atual.guardado && form.elements.gravacoes.value === 'apagar') ? 'Remover e apagar gravações' : 'Remover câmera';
+        }
+        form.addEventListener('change', rotulo);
+        dlg.addEventListener('cancel', function (ev) { if (trabalhando) ev.preventDefault(); });
+
+        // apaga em voltas curtas até o servidor dizer que não resta nada
+        function apagarAteOFim(id, restam, aoMudar) {
+            if (!restam) return Promise.resolve({ ok: true });
+            aoMudar(restam);
+            return enviar('removida-apagar', { id: id, continuar: true }).then(function (r) {
+                if (!r.ok) return r;
+                if (!r.restam) return r;
+                return new Promise(function (resolve) { setTimeout(resolve, 3000); })
+                    .then(function () { return apagarAteOFim(id, r.restam, aoMudar); });
+            });
+        }
+        function recarregar(msg) {
+            try { sessionStorage.setItem('g2w-aviso', msg); } catch (e) { /* só não mostra o aviso */ }
+            pendente = false;
+            window.location.hash = '';
+            window.location.reload();
+        }
+
+        document.addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-remover]');
+            if (b) {
+                atual = { id: parseInt(b.getAttribute('data-remover'), 10), nome: b.getAttribute('data-nome'), guardado: b.getAttribute('data-guardado') };
+                $('#r-prazo').textContent = b.getAttribute('data-prazo');
+                form.reset();
+                andamento.textContent = '';
+                $('#dlg-remover-t').textContent = 'Remover câmera: ' + atual.nome;
+                $('#r-guardado').textContent = atual.guardado;
+                $('#r-opcoes').hidden = !atual.guardado;
+                $('#r-sem-gravacao').hidden = !!atual.guardado;
+                rotulo();
+                abrir(dlg);
+                return;
+            }
+            var a = ev.target.closest('[data-apagar-removida]');
+            if (a) {
+                var id = parseInt(a.getAttribute('data-apagar-removida'), 10), nome = a.getAttribute('data-nome');
+                confirmar('Apagar do disco as gravações de ' + nome + ' (' + a.getAttribute('data-guardado') + ')? Não tem como desfazer.', 'Apagar gravações').then(function (sim) {
+                    if (!sim) return;
+                    ocupado(a, true, 'Apagando…');
+                    enviar('removida-apagar', { id: id }).then(function (r) {
+                        if (!r.ok) return r;
+                        return apagarAteOFim(id, r.restam, function (n) { a.textContent = 'Apagando… restam ' + n; });
+                    }).then(function (r) {
+                        if (!r.ok) { ocupado(a, false); aviso(r.erro, 'erro'); return; }
+                        recarregar(nome + ': gravações apagadas e espaço liberado.');
+                    });
+                });
+            }
+        });
+
+        form.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            if (!atual || trabalhando) return;
+            var apagar = !!atual.guardado && form.elements.gravacoes.value === 'apagar';
+            var nome = atual.nome, id = atual.id;
+            trabalhando = true;
+            ocupado(botao, true, 'Removendo…');
+            $('[data-fechar]', form).disabled = true;
+            enviar('camera-remover', { id: id, apagar_gravacoes: apagar }).then(function (r) {
+                if (!r.ok || !apagar) return r;
+                andamento.textContent = 'Câmera removida. Apagando as gravações…';
+                // o gravador leva alguns segundos para fechar o arquivo que estava aberto
+                return enviar('removida-apagar', { id: id, continuar: true }).then(function (r1) {
+                    if (!r1.ok) return r1;
+                    return apagarAteOFim(id, r1.restam, function (n) { andamento.textContent = 'Câmera removida. Apagando as gravações… restam ' + n + '.'; });
+                }).then(function (r2) { return r2.ok ? r : { ok: true, parcial: true }; });
+            }).then(function (r) {
+                trabalhando = false;
+                $('[data-fechar]', form).disabled = false;
+                if (!r.ok) { ocupado(botao, false); rotulo(); erroForm(form, r.erro); return; }
+                recarregar(r.parcial
+                    ? nome + ': câmera removida, mas parte das gravações não foi apagada. Use “Continuar apagando” no fim da página.'
+                    : nome + ': ' + (apagar ? 'câmera removida e gravações apagadas.' : r.msg));
+            });
+        });
+
+        // teste de conexão de câmera já cadastrada (usa a senha guardada no servidor)
+        document.addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-testar]');
+            if (!b) return;
+            var id = b.getAttribute('data-testar');
+            testar(b, $('[data-teste-de="' + id + '"]'), { id: parseInt(id, 10) });
+        });
     }
 
     function iniciarMapa() {
@@ -849,7 +1118,7 @@
     }
 
     if (aba === 'visao') iniciarVisao();
-    if (aba === 'cameras') { iniciarCameras(); iniciarLocalizacao(); }
+    if (aba === 'cameras') { iniciarCameras(); iniciarLocalizacao(); iniciarCadastro(); iniciarRemocao(); }
     if (aba === 'mapa') iniciarMapa();
     if (aba === 'usuarios') iniciarUsuarios();
     if (aba === 'gravacoes') iniciarGravacoes();

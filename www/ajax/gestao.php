@@ -13,6 +13,7 @@
  *   GET  /gestao/trechos            (JSON) trechos gravados de um dia
  *   GET  /gestao/midia              arquivo de gravação (tocar/baixar)
  *   GET  /gestao/miniatura          último quadro da câmera
+ *   GET  /gestao/modelos            (JSON) modelos de um fabricante, com o caminho do vídeo
  *   POST /gestao/<acao>             (JSON) ações — ver métodos post*
  *
  * Toda rota exige administrador, conferido aqui no servidor. Todo POST exige
@@ -45,7 +46,7 @@ class gestao extends Controller
     {
         G2WGestao::aplicarFuso();
         $post = (Inp::method() == 'POST');
-        $this->pedidoApi = $post || in_array($uri->two, array('trechos', 'midia', 'miniatura', 'buscarEndereco'), true);
+        $this->pedidoApi = $post || in_array($uri->two, array('trechos', 'midia', 'miniatura', 'buscarEndereco', 'modelos'), true);
 
         // Em chamada de API a recusa é um JSON com 401/403 — não o
         // redirecionamento pra /login que o chAccess() faz nas páginas.
@@ -130,6 +131,9 @@ class gestao extends Controller
         $cams = $this->camerasComLocal();
         return $this->pagina('cameras', 'Câmeras', array(
             'cams' => $cams,
+            'fabricantes' => G2WGestao::fabricantes(),
+            'removidas' => G2WGestao::removidas(),
+            'padrao_servidor' => G2WGestao::padraoDoServidor(),
             'discos' => G2WGestao::discos(G2WGestao::bytesPorDia($cams)),
         ), true);
     }
@@ -166,7 +170,9 @@ class gestao extends Controller
                 ? G2WGestao::quando($u['ultimo_acesso']).($u['pelo_app'] ? ' (aplicativo)' : ' (site)') : '';
         }
         $cams = array();
+        $fora = G2WGestao::idsRemovidas();
         foreach (G2WGestao::q("SELECT id, device_name FROM Devices ORDER BY device_name") as $c) {
+            if (in_array(intval($c['id']), $fora, true)) continue;
             $cams[] = array('id' => intval($c['id']), 'nome' => (string)$c['device_name']);
         }
         return $this->pagina('usuarios', 'Usuários', array(
@@ -180,8 +186,15 @@ class gestao extends Controller
     public function getGravacoes()
     {
         $cams = array();
+        $fora = G2WGestao::idsRemovidas();
         foreach (G2WGestao::q("SELECT id, device_name FROM Devices ORDER BY device_name") as $c) {
+            if (in_array(intval($c['id']), $fora, true)) continue;
             $cams[] = array('id' => intval($c['id']), 'nome' => (string)$c['device_name']);
+        }
+        // câmeras removidas com gravação guardada: só o administrador chega nelas
+        foreach (G2WGestao::removidas() as $r) {
+            if ($r['apagando']) continue;
+            $cams[] = array('id' => $r['id'], 'nome' => $r['nome'].' (removida)');
         }
         return $this->pagina('gravacoes', 'Gravações', array('cams' => $cams, 'hoje' => date('Y-m-d')));
     }
@@ -314,7 +327,7 @@ class gestao extends Controller
         $e = $this->entrada();
         $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
         $atual = G2WGestao::q("SELECT id, protocol, device, substream_path FROM Devices WHERE id=?", 'i', array($id));
-        if (!$atual) $this->falha(404, 'Câmera não encontrada.');
+        if (!$atual || in_array($id, G2WGestao::idsRemovidas(), true)) $this->falha(404, 'Câmera não encontrada.');
 
         $nome = $this->texto($e, 'nome', 1, 100, 'O nome da câmera');
         $dup = G2WGestao::q("SELECT id FROM Devices WHERE device_name=? AND id<>?", 'si', array($nome, $id));
@@ -393,13 +406,166 @@ class gestao extends Controller
         return array('device' => $device, 'host' => $p['host'], 'porta' => $porta, 'usuario' => $usuario, 'senha' => $senha);
     }
 
+    // ------------------------------------ cadastro e remoção de câmera
+
+    /* GET /gestao/modelos?fabricante=<id> -> modelos com caminho RTSP, da base
+     * local do servidor. */
+    public function getModelos()
+    {
+        session_write_close();
+        $f = intval(filter_input(INPUT_GET, 'fabricante', FILTER_VALIDATE_INT));
+        if ($f <= 0) $this->falha(422, 'Escolha o fabricante.');
+        $this->json(array('ok' => true, 'modelos' => G2WGestao::modelosDoFabricante($f)));
+    }
+
+    /* Endereço de câmera vindo do formulário: host, porta, caminho, usuário e
+     * senha em campos separados. A senha nunca volta em resposta nem em log. */
+    private function enderecoDoPedido($e)
+    {
+        $host = G2WGestao::hostCamera(isset($e['host']) ? $e['host'] : null);
+        if ($host === null) $this->falha(422, 'Endereço da câmera inválido. Use o número IP (exemplo: 192.168.1.50) ou o nome dela na rede, sem rtsp:// e sem barras.');
+        $porta = $this->inteiro($e, 'porta', 1, 65535, 'Porta RTSP inválida: informe um número de 1 a 65535 (o comum é 554).');
+        $caminho = G2WGestao::caminhoRtsp(isset($e['caminho']) ? $e['caminho'] : null);
+        if ($caminho === null) $this->falha(422, 'Caminho do vídeo inválido. Exemplo: /cam/realmonitor?channel=1&subtype=0. Não pode ter espaço, aspas nem a barra vertical.');
+        $usuario = isset($e['usuario']) ? $e['usuario'] : '';
+        $senha = isset($e['senha']) ? $e['senha'] : '';
+        if (!is_string($usuario) || !is_string($senha)) $this->falha(422, 'Usuário ou senha da câmera inválidos.');
+        $usuario = trim($usuario);
+        if (strlen($usuario) > 64 || preg_match('/[\s<>"\'\\\\\x00-\x1f\x7f]/', $usuario)) $this->falha(422, 'O usuário da câmera tem caractere não permitido (espaço, < > aspas ou barra invertida) ou passa de 64 caracteres.');
+        if (strlen($senha) > 128 || !mb_check_encoding($senha, 'UTF-8') || preg_match('/[\x00-\x1f\x7f]/', $senha)) $this->falha(422, 'A senha da câmera passa de 128 caracteres ou tem caractere de controle.');
+        if ($usuario === '' && $senha !== '') $this->falha(422, 'Informe o usuário da câmera junto com a senha.');
+        $device = $host.'|'.$porta.'|'.$caminho;
+        if (strlen($device) > 256) $this->falha(422, 'Endereço da câmera longo demais.');
+        return array('host' => $host, 'porta' => $porta, 'caminho' => $caminho, 'usuario' => $usuario, 'senha' => $senha, 'device' => $device);
+    }
+
+    /* POST /gestao/camera-testar
+     *   {host, porta, caminho, usuario, senha}  testa o que está no formulário
+     *   {id}                                    testa a câmera já cadastrada, com a senha guardada
+     * Responde só o resultado classificado (ver G2WGestao::testarRtsp). */
+    public function postCameraTestar()
+    {
+        $e = $this->entrada();
+        if (isset($e['id'])) {
+            $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
+            $c = G2WGestao::q("SELECT protocol, device, rtsp_username, rtsp_password FROM Devices WHERE id=?", 'i', array($id));
+            if (!$c || in_array($id, G2WGestao::idsRemovidas(), true)) $this->falha(404, 'Câmera não encontrada.');
+            $partes = explode('|', (string)$c[0]['device'], 3);
+            if ($c[0]['protocol'] !== 'IP-RTSP' || count($partes) < 3) $this->falha(422, 'Este tipo de câmera só é testado no modo avançado.');
+            $alvo = array('host' => G2WGestao::hostCamera($partes[0]), 'porta' => intval($partes[1]),
+                'caminho' => G2WGestao::caminhoRtsp($partes[2]), 'usuario' => (string)$c[0]['rtsp_username'], 'senha' => (string)$c[0]['rtsp_password']);
+            if ($alvo['host'] === null || $alvo['caminho'] === null || $alvo['porta'] < 1 || $alvo['porta'] > 65535) {
+                $this->falha(422, 'O endereço guardado desta câmera tem formato que o teste não aceita. Confira no modo avançado.');
+            }
+        } else {
+            $alvo = $this->enderecoDoPedido($e);
+        }
+        $uid = intval($_SESSION['id']);
+        session_write_close();
+        $vaga = G2WGestao::vagaDeTeste($uid);
+        if (!is_array($vaga)) $this->falha(429, $vaga);
+        $r = G2WGestao::testarRtsp($alvo['host'], $alvo['porta'], $alvo['caminho'], $alvo['usuario'], $alvo['senha']);
+        foreach ($vaga as $t) fclose($t);
+        error_log('g2w-teste-camera usuario='.$uid.' resultado='.($r['conectou'] ? 'ok' : $r['motivo']));
+        $this->json(array('ok' => true, 'teste' => $r));
+    }
+
+    /* POST /gestao/camera-nova. Mesmas colunas e padrões do cadastro do modo
+     * avançado (ipCamera::create), mas com consulta parametrizada. O motor
+     * acha a linha nova sozinho, na conferência periódica dele. */
+    public function postCameraNova()
+    {
+        $e = $this->entrada();
+        $nome = $this->texto($e, 'nome', 1, 100, 'O nome da câmera');
+        $a = $this->enderecoDoPedido($e);
+        if (G2WGestao::q("SELECT id FROM Devices WHERE device_name=?", 's', array($nome))) $this->falha(422, 'Já existe outra câmera com esse nome.');
+        if (G2WGestao::q("SELECT id FROM Devices WHERE device=?", 's', array($a['device']))) $this->falha(422, 'Outra câmera já usa esse endereço.');
+
+        $ret = isset($e['retencao_dias']) ? $e['retencao_dias'] : null;
+        if ($ret === '') $ret = null;
+        if ($ret !== null) {
+            if (!is_numeric($ret) || intval($ret) != $ret || $ret < 1 || $ret > 3650) $this->falha(422, 'Dias guardados: informe um número de 1 a 3650, ou deixe em branco.');
+            $ret = intval($ret);
+        }
+        $grav = isset($e['gravacao']) ? (string)$e['gravacao'] : 'padrao';
+        if (!in_array($grav, array('padrao', 'sempre', 'nunca'), true)) $this->falha(422, 'Opção de gravação inválida.');
+        $som = !empty($e['gravar_som']);
+
+        $modelo = 'Generic';
+        if (isset($e['modelo']) && is_string($e['modelo']) && $e['modelo'] !== '') {
+            if (strlen($e['modelo']) > 100 || !G2WGestao::modeloExiste($e['modelo'])) $this->falha(422, 'Modelo de câmera desconhecido.');
+            $modelo = $e['modelo'];
+        }
+
+        $local = null;
+        if (isset($e['local']) && is_array($e['local'])) {
+            try {
+                list($lat, $lon) = G2WGestao::coordenada(isset($e['local']['latitude']) ? $e['local']['latitude'] : null, isset($e['local']['longitude']) ? $e['local']['longitude'] : null);
+                $local = array($lat, $lon, G2WGestao::endereco(isset($e['local']['endereco']) ? $e['local']['endereco'] : ''));
+            } catch (InvalidArgumentException $ex) {
+                $this->falha(422, $ex->getMessage());
+            }
+        }
+
+        $com_agenda = ($grav !== 'padrao');
+        G2WGestao::q("INSERT INTO Devices (device_name, protocol, device, driver, rtsp_username, rtsp_password, resolutionX, resolutionY,
+                mjpeg_path, model, rtsp_rtp_prefer_tcp, onvif_port, substream_path, hls_window_size, hls_segment_size, hls_segment_duration,
+                max_age_days, audio_disabled, schedule_override_global, schedule)
+            VALUES (?, 'IP-RTSP', ?, '', ?, ?, 640, 480, ?, ?, 1, 80, ?, 5, 0, 0, ?, ?, ?, ?)",
+            'sssssssiiis', array($nome, $a['device'], $a['usuario'], $a['senha'], $a['host'].'||', $modelo, $a['host'].'|'.$a['porta'].'|',
+                $ret, $som ? 0 : 1, $com_agenda ? 1 : 0, str_repeat($grav === 'nunca' ? 'N' : 'C', 168)));
+        $novo = G2WGestao::q("SELECT id FROM Devices WHERE device_name=?", 's', array($nome));
+        if (!$novo) $this->falha(500, 'O servidor não conseguiu gravar a câmera. Tente de novo.');
+        $id = intval($novo[0]['id']);
+        G2WGestao::removerLocal($id);   // id reaproveitado depois de restauração de banco não herda posição antiga
+        if ($local) G2WGestao::salvarLocal($id, $local[0], $local[1], $local[2]);
+        error_log('g2w-camera-nova usuario='.intval($_SESSION['id']).' camera='.$id);
+        $this->json(array('ok' => true, 'id' => $id, 'msg' => 'Câmera adicionada. Ela aparece ao vivo em até 1 minuto.'));
+    }
+
+    /* POST /gestao/camera-remover {id, apagar_gravacoes: bool}
+     *
+     * A câmera sai de uso (ver G2WGestao::removerCamera). As gravações NÃO
+     * são apagadas, a menos que o pedido diga: ficam visíveis só para
+     * administrador, em Gravações, até vencerem ou serem apagadas. */
+    public function postCameraRemover()
+    {
+        $e = $this->entrada();
+        $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
+        if (in_array($id, G2WGestao::idsRemovidas(), true)) $this->falha(404, 'Câmera não encontrada.');
+        $apagar = !empty($e['apagar_gravacoes']);
+        $nome = G2WGestao::removerCamera($id, $apagar);
+        if ($nome === false) $this->falha(404, 'Câmera não encontrada.');
+        error_log('g2w-camera-removida usuario='.intval($_SESSION['id']).' camera='.$id.' apagar_gravacoes='.($apagar ? 1 : 0));
+        $this->json(array('ok' => true, 'id' => $id,
+            'msg' => $apagar ? 'Câmera removida.' : 'Câmera removida. As gravações dela continuam guardadas.'));
+    }
+
+    /* POST /gestao/removida-apagar {id}: apaga o conteúdo das gravações de uma
+     * câmera já removida, em voltas de até 20 s. A tela repete até restam = 0;
+     * a exclusão dos arquivos vazios fica com o motor (ver a biblioteca). */
+    public function postRemovidaApagar()
+    {
+        $e = $this->entrada();
+        $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
+        if (!in_array($id, G2WGestao::idsRemovidas(), true)) {
+            // já saiu de vez (não tinha gravação, ou o motor já terminou): nada a fazer
+            if (!empty($e['continuar'])) $this->json(array('ok' => true, 'restam' => 0, 'msg' => 'Gravações apagadas.'));
+            $this->falha(404, 'Não há gravações guardadas dessa câmera.');
+        }
+        if (empty($e['continuar'])) error_log('g2w-removida-apagar usuario='.intval($_SESSION['id']).' camera='.$id);
+        session_write_close();
+        $resta = G2WGestao::apagarGravacoesDaRemovida($id, 20);
+        $this->json(array('ok' => true, 'restam' => $resta, 'msg' => $resta ? 'Apagando…' : 'Gravações apagadas.'));
+    }
+
     /* Localização da câmera no mapa. {id, latitude, longitude, endereco} grava;
      * {id, remover: true} apaga. */
     public function postCameraLocal()
     {
         $e = $this->entrada();
         $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
-        if (!G2WGestao::q("SELECT id FROM Devices WHERE id=?", 'i', array($id))) $this->falha(404, 'Câmera não encontrada.');
+        if (!in_array($id, G2WGestao::idsCameras(), true)) $this->falha(404, 'Câmera não encontrada.');
 
         if (!empty($e['remover'])) {
             G2WGestao::removerLocal($id);

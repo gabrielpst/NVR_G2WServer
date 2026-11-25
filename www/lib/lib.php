@@ -548,7 +548,11 @@ class user{
 			}
 	}
 	public function camPermission($id){
-		return (in_array($id, $this->info['access_device_list'])) ? false : true;
+		if (in_array($id, $this->info['access_device_list'])) return false;
+		// G2W 2026-11: câmera removida pelo painel (/gestao) fica guardada, com
+		// as gravações, só para o administrador até elas acabarem.
+		if (empty($this->info['access_setup']) && in_array(intval($id), G2WGestao::idsRemovidas(), true)) return false;
+		return true;
 	}
 	public function doLogin($password, $from_client = false){
 		if (!$this->info) { return LOGIN_WRONG; };

@@ -87,7 +87,7 @@ class G2WGestao
         if (self::$tabelasOk !== null) return self::$tabelasOk;
         try {
             // caminho normal: as duas já existem e nenhum CREATE é executado
-            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 3) return self::$tabelasOk = true;
+            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 4) return self::$tabelasOk = true;
             self::q("CREATE TABLE IF NOT EXISTS G2WPainelAcessos (
                 user_id INT NOT NULL PRIMARY KEY,
                 ultimo_acesso INT NOT NULL,
@@ -108,6 +108,17 @@ class G2WGestao
                 iniciado_em INT NOT NULL PRIMARY KEY,
                 visto_em INT NOT NULL
             ) DEFAULT CHARSET=utf8");
+            // Câmeras removidas pelo painel cujas gravações ficaram guardadas.
+            // O banco apaga as linhas de Media junto com a de Devices (chave
+            // estrangeira em cascata), então a câmera removida continua em
+            // Devices, desativada e sem endereço nem senha, até a última
+            // gravação sair. Aqui ficam o nome original e a data.
+            self::q("CREATE TABLE IF NOT EXISTS G2WPainelRemovidas (
+                device_id INT NOT NULL PRIMARY KEY,
+                nome VARCHAR(100) NOT NULL,
+                removida_em INT NOT NULL,
+                apagando TINYINT(1) NOT NULL DEFAULT 0
+            ) DEFAULT CHARSET=utf8mb4");
             self::$tabelasOk = true;
         } catch (Throwable $e) {
             error_log('G2W gestao: tabelas do painel indisponiveis: '.$e->getMessage());
@@ -143,9 +154,28 @@ class G2WGestao
 
     // ------------------------------------------------------------ câmeras
 
+    /* Câmeras em uso. As removidas pelo painel (ver removerCamera) não contam. */
     public static function idsCameras()
     {
-        return array_map('intval', array_column(self::q("SELECT id FROM Devices ORDER BY id"), 'id'));
+        $ids = array_map('intval', array_column(self::q("SELECT id FROM Devices ORDER BY id"), 'id'));
+        return array_values(array_diff($ids, self::idsRemovidas()));
+    }
+
+    private static $removidasIds = null;
+
+    /* ids das câmeras removidas pelo painel que ainda estão guardadas. Usado
+     * por user::camPermission() em toda rota: não pode falhar nem custar caro. */
+    public static function idsRemovidas()
+    {
+        if (self::$removidasIds !== null) return self::$removidasIds;
+        try {
+            if (!self::q("SHOW TABLES LIKE 'G2WPainelRemovidas'")) return self::$removidasIds = array();
+            self::$removidasIds = array_map('intval', array_column(self::q("SELECT device_id FROM G2WPainelRemovidas"), 'device_id'));
+        } catch (Throwable $e) {
+            error_log('G2W gestao: idsRemovidas: '.$e->getMessage());
+            self::$removidasIds = array();
+        }
+        return self::$removidasIds;
     }
 
     public static function agendaGlobal()
@@ -153,6 +183,11 @@ class G2WGestao
         $r = self::q("SELECT value FROM GlobalSettings WHERE parameter='G_DEV_SCED'");
         $s = $r ? (string)$r[0]['value'] : '';
         return (strlen($s) == 168) ? $s : str_repeat('C', 168);
+    }
+
+    public static function padraoDoServidor()
+    {
+        return self::modoAgenda(self::agendaGlobal());
     }
 
     private static function modoAgenda($agenda)
@@ -182,6 +217,7 @@ class G2WGestao
 
         $linhas = self::q("SELECT id, device_name, protocol, device, (rtsp_username IS NOT NULL AND rtsp_username<>'') AS tem_credencial,
             disabled, max_age_days, schedule, schedule_override_global FROM Devices ORDER BY device_name");
+        $removidas = self::idsRemovidas();
 
         $agg = array();
         foreach (self::q("SELECT device_id, MIN(IF(archive=0, start, NULL)) AS antiga, MAX(end) AS ultimo_fim,
@@ -200,6 +236,7 @@ class G2WGestao
         $cams = array();
         foreach ($linhas as $l) {
             $id = intval($l['id']);
+            if (in_array($id, $removidas, true)) continue;
             $segue_padrao = !intval($l['schedule_override_global']) || strlen((string)$l['schedule']) != 168;
             $agenda = $segue_padrao ? $global : $l['schedule'];
             $letra = $agenda[$slot];
@@ -269,6 +306,397 @@ class G2WGestao
             );
         }
         return $cams;
+    }
+
+    // ------------------------------------- cadastro e remoção de câmera
+
+    const BASE_MODELOS = '/usr/share/bluecherry/sqlite/cameras.db';
+    const FFPROBE = '/usr/lib/bluecherry/ffprobe';
+    const TESTE_SEGUNDOS = 10;
+    const TESTE_SIMULTANEOS = 2;
+
+    private static function baseModelos()
+    {
+        if (!is_readable(self::BASE_MODELOS)) return null;
+        try {
+            $db = new PDO('sqlite:'.self::BASE_MODELOS, null, null, array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
+            $db->exec('PRAGMA query_only = ON');
+            return $db;
+        } catch (Throwable $e) {
+            error_log('G2W gestao: base de modelos: '.$e->getMessage());
+            return null;
+        }
+    }
+
+    /* Fabricantes que têm ao menos um modelo com caminho RTSP conhecido, da
+     * base local que já vem no servidor (a mesma do modo avançado). Nada é
+     * buscado na internet. */
+    public static function fabricantes()
+    {
+        $db = self::baseModelos();
+        if (!$db) return array();
+        $res = array();
+        try {
+            foreach ($db->query("SELECT m.id, m.manufacturer AS nome, COUNT(*) AS n FROM cameras c JOIN manufacturers m ON m.id=c.manufacturer
+                    WHERE c.h264_url<>'' GROUP BY m.id, m.manufacturer ORDER BY m.manufacturer COLLATE NOCASE") as $l) {
+                $res[] = array('id' => intval($l['id']), 'nome' => (string)$l['nome'], 'modelos' => intval($l['n']));
+            }
+        } catch (Throwable $e) {
+            error_log('G2W gestao: fabricantes: '.$e->getMessage());
+        }
+        return $res;
+    }
+
+    public static function modelosDoFabricante($fabricanteId)
+    {
+        $db = self::baseModelos();
+        if (!$db) return array();
+        $res = array();
+        try {
+            $st = $db->prepare("SELECT api_id, model, h264_url FROM cameras WHERE manufacturer=? AND h264_url<>'' ORDER BY model COLLATE NOCASE");
+            $st->execute(array(intval($fabricanteId)));
+            foreach ($st as $l) {
+                $caminho = self::caminhoRtsp('/'.ltrim(trim((string)$l['h264_url']), '/'));
+                if ($caminho === null) continue;   // caminho da base que o nosso cadastro não aceitaria
+                $res[] = array('id' => (string)$l['api_id'], 'modelo' => (string)$l['model'], 'caminho' => $caminho);
+            }
+        } catch (Throwable $e) {
+            error_log('G2W gestao: modelos: '.$e->getMessage());
+        }
+        return $res;
+    }
+
+    public static function modeloExiste($apiId)
+    {
+        $db = self::baseModelos();
+        if (!$db) return false;
+        $st = $db->prepare("SELECT 1 FROM cameras WHERE api_id=?");
+        $st->execute(array((string)$apiId));
+        return (bool)$st->fetchColumn();
+    }
+
+    /* Endereço da câmera: IPv4 ou nome de host. Devolve o texto normalizado ou
+     * null. "|" é o separador da coluna Devices.device, então nunca passa. */
+    public static function hostCamera($h)
+    {
+        if (!is_string($h)) return null;
+        $h = strtolower(trim($h));
+        if ($h === '' || strlen($h) > 253) return null;
+        if (!preg_match('/^[a-z0-9]([a-z0-9.\-]*[a-z0-9])?$/', $h) || strpos($h, '..') !== false) return null;
+        if (preg_match('/^[0-9.]+$/', $h)) {
+            if (filter_var($h, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) return null;
+            if (!self::ipDeCameraAceito($h)) return null;
+        }
+        return $h;
+    }
+
+    /* Recusa só o que nunca é câmera: 0.x, link-local (169.254.x, onde moram
+     * serviços de metadados), multicast e broadcast. Rede interna e o próprio
+     * servidor passam: o administrador já pode cadastrar câmera em qualquer
+     * endereço, e há instalação com repetidor de vídeo na mesma máquina. */
+    public static function ipDeCameraAceito($ip)
+    {
+        $n = ip2long($ip);
+        if ($n === false) return false;
+        $a = ($n >> 24) & 0xff;
+        $b = ($n >> 16) & 0xff;
+        if ($a === 0 || $a >= 224 || ($a === 169 && $b === 254)) return false;
+        return true;
+    }
+
+    /* Caminho do vídeo: começa com "/", sem espaço, sem "|" e sem os
+     * caracteres que o painel original imprimiria como HTML. */
+    public static function caminhoRtsp($c)
+    {
+        if (!is_string($c)) return null;
+        $c = trim($c);
+        if ($c === '') return null;
+        if ($c[0] !== '/') $c = '/'.$c;
+        if (strlen($c) > 200 || preg_match('/[\s|<>"\'\\\\\x00-\x1f\x7f-\xff]/', $c)) return null;
+        return $c;
+    }
+
+    /* Abre o vídeo da câmera por RTSP e diz o que veio. Nunca devolve texto
+     * da câmera nem do ffprobe: só categorias e os campos conferidos abaixo.
+     *
+     * - O nome de host é resolvido UMA vez aqui e o ffprobe recebe o IP (o
+     *   endereço conferido é o endereço conectado).
+     * - A senha não vai na linha de comando (qualquer processo do servidor
+     *   leria em /proc): o endereço completo vai num arquivo temporário 0600,
+     *   lido pelo ffprobe e apagado em seguida.
+     * - Sem shell; só os protocolos de RTSP são aceitos pelo ffprobe.
+     */
+    public static function testarRtsp($host, $porta, $caminho, $usuario, $senha)
+    {
+        $ip = $host;
+        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            $ip = gethostbyname($host.(strpos($host, '.') === false ? '' : '.'));
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+                return array('conectou' => false, 'motivo' => 'nome',
+                    'texto' => 'O servidor não achou esse nome na rede. Confira o endereço ou use o número IP da câmera.');
+            }
+        }
+        if (!self::ipDeCameraAceito($ip)) {
+            return array('conectou' => false, 'motivo' => 'endereco', 'texto' => 'Esse endereço não pode ser de uma câmera.');
+        }
+
+        $credencial = ($usuario !== '') ? rawurlencode($usuario).':'.rawurlencode($senha).'@' : '';
+        $url = 'rtsp://'.$credencial.$ip.':'.intval($porta).$caminho;
+
+        $dir = sys_get_temp_dir();
+        $lista = tempnam($dir, 'g2w-teste-cam-');
+        if ($lista === false) return array('conectou' => false, 'motivo' => 'interno', 'texto' => 'O servidor não conseguiu preparar o teste.');
+        chmod($lista, 0600);
+        // formato "ffconcat": aspas simples, com a aspa do conteúdo escapada
+        file_put_contents($lista, "ffconcat version 1.0\nfile '".str_replace("'", "'\\''", $url)."'\n");
+
+        $cmd = array('timeout', '-k', '2', (string)self::TESTE_SEGUNDOS, self::FFPROBE,
+            '-v', 'error', '-f', 'concat', '-safe', '0', '-protocol_whitelist', 'file,rtsp,tcp,rtp,udp',
+            '-show_entries', 'stream=codec_type,codec_name,width,height', '-of', 'json', '-i', $lista);
+        $saida = '';
+        $erros = '';
+        $rc = -1;
+        $p = @proc_open($cmd, array(0 => array('file', '/dev/null', 'r'), 1 => array('pipe', 'w'), 2 => array('pipe', 'w')), $pipes, $dir, array('PATH' => '/usr/bin:/bin'));
+        if (is_resource($p)) {
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+            $limite = microtime(true) + self::TESTE_SEGUNDOS + 4;
+            do {
+                $saida .= (string)stream_get_contents($pipes[1], 65536);
+                $erros .= (string)stream_get_contents($pipes[2], 65536);
+                if (strlen($saida) > 262144 || strlen($erros) > 262144) break;
+                $st = proc_get_status($p);
+                if (!$st['running']) { $rc = $st['exitcode']; break; }
+                usleep(100000);
+            } while (microtime(true) < $limite);
+            $saida .= (string)stream_get_contents($pipes[1], 65536);
+            $erros .= (string)stream_get_contents($pipes[2], 65536);
+            $st = proc_get_status($p);
+            if ($st['running']) { proc_terminate($p, 15); usleep(300000); proc_terminate($p, 9); $rc = 124; }
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($p);
+        }
+        @unlink($lista);
+
+        $j = json_decode($saida, true);
+        $video = null;
+        $audio = null;
+        if (is_array($j) && isset($j['streams']) && is_array($j['streams'])) {
+            foreach ($j['streams'] as $s) {
+                if (!is_array($s) || !isset($s['codec_type'])) continue;
+                $codec = isset($s['codec_name']) ? strtolower(preg_replace('/[^A-Za-z0-9_]/', '', (string)$s['codec_name'])) : '';
+                if ($s['codec_type'] === 'video' && !$video) {
+                    $video = array('codec' => $codec, 'largura' => isset($s['width']) ? intval($s['width']) : 0, 'altura' => isset($s['height']) ? intval($s['height']) : 0);
+                } elseif ($s['codec_type'] === 'audio' && !$audio) {
+                    $audio = array('codec' => $codec);
+                }
+            }
+        }
+        if ($video) return self::resultadoDoTeste($video, $audio);
+
+        // sem vídeo: classifica pelo que o ffprobe reclamou, sem repassar o texto
+        if ($rc === 124 || $rc === 137 || stripos($erros, 'timed out') !== false || stripos($erros, 'No route to host') !== false
+                || stripos($erros, 'Network is unreachable') !== false) {
+            return array('conectou' => false, 'motivo' => 'sem_resposta',
+                'texto' => 'Sem resposta nesse endereço. Confira o IP, se a câmera está ligada e se está na mesma rede do servidor.');
+        }
+        // resposta RTSP da câmera, nas duas formas em que o ffprobe a escreve
+        // ("method DESCRIBE failed: 404 Not Found", "Server returned 404 ...")
+        $codigos = array();
+        if (preg_match_all('/(?:failed:|returned)\s*(\d{3})\b/', $erros, $m)) $codigos = array_map('intval', $m[1]);
+        if (array_intersect($codigos, array(401, 403))) {
+            return array('conectou' => false, 'motivo' => 'senha', 'texto' => ($usuario === '')
+                ? 'A câmera respondeu, mas pede usuário e senha.'
+                : 'A câmera respondeu, mas recusou o usuário ou a senha.');
+        }
+        if (array_intersect($codigos, array(400, 404, 406, 451, 454, 455, 459))) {
+            return array('conectou' => false, 'motivo' => 'caminho',
+                'texto' => 'A câmera respondeu, mas não tem vídeo nesse caminho. Confira o caminho do vídeo (ou escolha outro modelo).');
+        }
+        if (stripos($erros, 'Connection refused') !== false) {
+            return array('conectou' => false, 'motivo' => 'porta',
+                'texto' => 'O endereço existe, mas nada atende nessa porta. Confira a porta RTSP (o comum é 554) e se o RTSP está ligado na câmera.');
+        }
+        if (stripos($erros, 'Invalid data') !== false) {
+            return array('conectou' => false, 'motivo' => 'nao_rtsp',
+                'texto' => 'Algo atende nesse endereço e porta, mas não é o vídeo de uma câmera (RTSP). Confira a porta.');
+        }
+        return array('conectou' => false, 'motivo' => 'falha',
+            'texto' => 'Não foi possível abrir o vídeo dessa câmera. Confira endereço, porta, caminho, usuário e senha.');
+    }
+
+    private static function resultadoDoTeste($video, $audio)
+    {
+        $nomes_v = array('h264' => 'H.264', 'hevc' => 'H.265', 'mjpeg' => 'MJPEG', 'mpeg4' => 'MPEG-4');
+        $nomes_a = array('aac' => 'AAC', 'pcm_alaw' => 'G.711 (PCMA)', 'pcm_mulaw' => 'G.711 (PCMU)', 'opus' => 'Opus',
+            'adpcm_g726' => 'G.726', 'adpcm_g726le' => 'G.726', 'mp2' => 'MP2', 'mp3' => 'MP3');
+        $v = isset($nomes_v[$video['codec']]) ? $nomes_v[$video['codec']] : 'formato não reconhecido';
+        $avisos = array();
+        if ($video['codec'] === 'hevc') {
+            $avisos[] = 'O vídeo é H.265: grava normalmente, mas não toca em todo navegador (no aplicativo toca). Se puder, mude a câmera para H.264.';
+        } elseif ($video['codec'] !== 'h264') {
+            $avisos[] = 'O vídeo não é H.264 nem H.265: a gravação pode não funcionar. Mude a câmera para H.264.';
+        }
+        $a = null;
+        if ($audio) {
+            $a = isset($nomes_a[$audio['codec']]) ? $nomes_a[$audio['codec']] : 'formato não reconhecido';
+            if ($audio['codec'] !== 'aac') {
+                $avisos[] = 'O som da câmera é '.$a.', não AAC: a gravação fica sem som. Para gravar som, mude o áudio da câmera para AAC.';
+            }
+        }
+        $resolucao = ($video['largura'] > 0 && $video['altura'] > 0) ? $video['largura'].' × '.$video['altura'] : null;
+        $texto = 'Conectou. Vídeo '.$v.($resolucao ? ', '.$resolucao : '').'; '.($a ? 'som '.$a : 'sem som').'.';
+        return array('conectou' => true, 'texto' => $texto, 'avisos' => $avisos,
+            'video' => array('formato' => $v, 'largura' => $video['largura'], 'altura' => $video['altura']),
+            'som' => $a);
+    }
+
+    /* Uma vaga de teste: um por administrador e TESTE_SIMULTANEOS no servidor.
+     * Devolve os arquivos travados (soltam ao fechar) ou um texto de recusa. */
+    public static function vagaDeTeste($userId)
+    {
+        $dir = sys_get_temp_dir();
+        $meu = @fopen($dir.'/g2w-teste-cam-u'.intval($userId).'.trava', 'c');
+        if (!$meu || !flock($meu, LOCK_EX | LOCK_NB)) return 'Já há um teste seu em andamento. Espere terminar.';
+        for ($i = 0; $i < self::TESTE_SIMULTANEOS; $i++) {
+            $vaga = @fopen($dir.'/g2w-teste-cam-vaga'.$i.'.trava', 'c');
+            if ($vaga && flock($vaga, LOCK_EX | LOCK_NB)) return array($meu, $vaga);
+            if ($vaga) fclose($vaga);
+        }
+        fclose($meu);
+        return 'O servidor já está testando outras câmeras. Tente de novo em instantes.';
+    }
+
+    public static function cameraExiste($id)
+    {
+        return (bool)self::q("SELECT id FROM Devices WHERE id=?", 'i', array(intval($id)));
+    }
+
+    /* Tira a câmera de uso sem apagar nada: desativa (o motor fecha o arquivo
+     * em gravação e para de conectar), troca o nome e o endereço por marcas
+     * (libera os dois para um cadastro novo) e apaga usuário e senha
+     * guardados. As gravações continuam em Media, presas a esta linha. */
+    public static function removerCamera($id, $apagar)
+    {
+        $id = intval($id);
+        $c = self::q("SELECT device_name FROM Devices WHERE id=?", 'i', array($id));
+        if (!$c || !self::garantirTabelas()) return false;
+        $nome = mb_substr((string)$c[0]['device_name'], 0, 100);
+        self::q("REPLACE INTO G2WPainelRemovidas (device_id, nome, removida_em, apagando) VALUES (?, ?, ?, ?)", 'isii', array($id, $nome, time(), $apagar ? 1 : 0));
+        self::$removidasIds = null;
+        self::q("UPDATE Devices SET disabled=1, device_name=?, device=?, rtsp_username='', rtsp_password='', substream_path='', mjpeg_path='', substream_mode=0 WHERE id=?",
+            'ssi', array(mb_substr($nome, 0, 70).' (removida '.$id.')', 'removida|0|/'.$id, $id));
+        // sem a lista de eventos a câmera some do histórico do aplicativo; os vídeos ficam
+        self::q("DELETE FROM EventsCam WHERE device_id=?", 'i', array($id));
+        self::removerLocal($id);
+        // nunca gravou: não há o que guardar, sai de vez agora
+        if (!self::q("SELECT id FROM Media WHERE device_id=? LIMIT 1", 'i', array($id))) self::excluirRemovida($id);
+        return $nome;
+    }
+
+    /* Câmeras removidas que ainda têm gravação no disco. Quando a última
+     * gravação sai (apagada aqui, pelo prazo em dias da câmera ou pela limpeza
+     * por espaço), a câmera é excluída de vez. */
+    public static function removidas()
+    {
+        if (!self::garantirTabelas()) return array();
+        $res = array();
+        try {
+            foreach (self::q("SELECT r.device_id, r.nome, r.removida_em, r.apagando, d.id AS existe, d.max_age_days,
+                    COUNT(m.id) AS arquivos, COALESCE(SUM(m.size), 0) AS bytes, MIN(m.start) AS antiga, MAX(m.start) AS recente
+                    FROM G2WPainelRemovidas r
+                    LEFT JOIN Devices d ON d.id=r.device_id
+                    LEFT JOIN Media m ON m.device_id=r.device_id AND m.archive=0 AND m.filepath<>''
+                    GROUP BY r.device_id, r.nome, r.removida_em, r.apagando, d.id, d.max_age_days ORDER BY r.removida_em DESC") as $l) {
+                $id = intval($l['device_id']);
+                if ($l['existe'] === null) {   // excluída por fora (modo avançado)
+                    self::q("DELETE FROM G2WPainelRemovidas WHERE device_id=?", 'i', array($id));
+                    continue;
+                }
+                if (!intval($l['arquivos'])) {
+                    if (time() - intval($l['removida_em']) > 120) self::excluirRemovida($id);
+                    continue;
+                }
+                $res[] = array('id' => $id, 'nome' => (string)$l['nome'], 'removida_em' => intval($l['removida_em']),
+                    'apagando' => (bool)intval($l['apagando']), 'arquivos' => intval($l['arquivos']), 'bytes' => floatval($l['bytes']),
+                    'antiga' => intval($l['antiga']), 'recente' => intval($l['recente']),
+                    'retencao_dias' => ($l['max_age_days'] === null) ? null : intval($l['max_age_days']));
+            }
+        } catch (Throwable $e) {
+            error_log('G2W gestao: removidas: '.$e->getMessage());
+        }
+        return $res;
+    }
+
+    /* Exclusão definitiva de uma câmera removida que já não tem gravação. */
+    private static function excluirRemovida($id)
+    {
+        $id = intval($id);
+        if (!in_array($id, self::idsRemovidas(), true)) return;
+        self::q("DELETE FROM OnvifEvents WHERE device_id=?", 'i', array($id));
+        self::q("DELETE FROM PTZPresets WHERE device_id=?", 'i', array($id));
+        self::q("DELETE FROM Devices WHERE id=? AND disabled=1", 'i', array($id));   // Media e EventsCam vão em cascata
+        self::q("DELETE FROM G2WPainelRemovidas WHERE device_id=?", 'i', array($id));
+        self::removerLocal($id);
+        self::$removidasIds = null;
+    }
+
+    /* Apaga as gravações de uma câmera JÁ removida, por até $segundos.
+     *
+     * O painel (PHP) não consegue excluir arquivo: as pastas de gravação são
+     * do motor e o painel só tem leitura nelas. Mas tem escrita nos arquivos.
+     * Então são dois passos:
+     *   1. aqui, cada vídeo (e o quadro .jpg ao lado) é esvaziado: o conteúdo
+     *      some e o espaço volta na hora;
+     *   2. a linha é marcada como vencida (prazo de 1 dia e início recuado), e
+     *      a limpeza por prazo do próprio motor, que roda a cada 5 minutos,
+     *      exclui o arquivo vazio. Quando a última linha sai, removidas()
+     *      exclui a câmera de vez.
+     * Devolve quantas gravações ainda faltam esvaziar (0 = passo 1 completo).
+     * O arquivo que o motor ainda está fechando fica para a volta seguinte. */
+    public static function apagarGravacoesDaRemovida($deviceId, $segundos)
+    {
+        $deviceId = intval($deviceId);
+        if (!in_array($deviceId, self::idsRemovidas(), true)) throw new InvalidArgumentException('Câmera não removida.');
+        self::q("UPDATE G2WPainelRemovidas SET apagando=1 WHERE device_id=?", 'i', array($deviceId));
+        self::q("UPDATE Devices SET max_age_days=1 WHERE id=? AND disabled=1", 'i', array($deviceId));
+        $fim = microtime(true) + $segundos;
+        $vencido = time() - 3 * 86400;
+        $pendente = "device_id=? AND archive=0 AND filepath<>'' AND start>?";
+        $pulados = array();
+        do {
+            $lote = self::q("SELECT id, filepath, end FROM Media WHERE $pendente ORDER BY id LIMIT 200", 'ii', array($deviceId, $vencido));
+            $ids = array();
+            clearstatcache();
+            foreach ($lote as $m) {
+                if (isset($pulados[$m['id']])) continue;
+                $real = self::arquivoDeGravacao((string)$m['filepath']);
+                if ($real !== false) {
+                    // aberto e mexido há menos de 1 min: o motor ainda escreve nele
+                    if (intval($m['end']) === 0 && (time() - intval(@filemtime($real))) < 60) { $pulados[$m['id']] = true; continue; }
+                    self::esvaziar($real);
+                    $foto = preg_replace('/\.[A-Za-z0-9]+$/', '.jpg', $real);   // quadro que o motor grava ao lado
+                    if ($foto !== $real && is_file($foto)) self::esvaziar($foto);
+                }
+                $ids[] = intval($m['id']);
+            }
+            if (!$ids) break;
+            $marcas = implode(',', array_fill(0, count($ids), '?'));
+            self::q("UPDATE Media SET size=0, start=LEAST(start, ?), end=IF(end=0, LEAST(start, ?)+1, end) WHERE id IN ($marcas)",
+                'ii'.str_repeat('i', count($ids)), array_merge(array($vencido, $vencido), $ids));
+        } while (microtime(true) < $fim);
+        $resta = self::q("SELECT COUNT(*) AS n FROM Media WHERE $pendente", 'ii', array($deviceId, $vencido));
+        return $resta ? intval($resta[0]['n']) : 0;
+    }
+
+    private static function esvaziar($arquivo)
+    {
+        $f = @fopen($arquivo, 'r+');
+        if (!$f) { error_log('G2W gestao: nao foi possivel esvaziar '.basename($arquivo)); return false; }
+        $ok = ftruncate($f, 0);
+        fclose($f);
+        return $ok;
     }
 
     // ------------------------------------------- localização (mapa)

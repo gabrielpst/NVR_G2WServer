@@ -423,3 +423,27 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--verde); 
 }
 .linha-camera-local .local-texto { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
 #loc-coordenada { font-variant-numeric: tabular-nums; }
+
+/* cadastro e remoção de câmera (2026-11) */
+.titulo-com-acao { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.titulo-com-acao .titulo-pagina { margin-bottom: 0; }
+.dialogo-nova { width: min(680px, calc(100vw - 24px)); }
+.teste-linha { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin: 4px 0 16px; }
+.teste-linha .resultado-teste { flex: 1 1 260px; }
+.resultado-teste {
+  border-left: 4px solid var(--neutro); background: var(--neutro-suave);
+  padding: 8px 12px; border-radius: 6px; font-size: .875rem; min-width: 0; overflow-wrap: anywhere;
+}
+.resultado-teste.teste-ok { border-left-color: var(--verde); }
+.resultado-teste.teste-falha { border-left-color: var(--erro); }
+.resultado-teste.teste-atencao { border-left-color: var(--alerta); }
+.resultado-teste p { margin: 0; }
+.resultado-teste p + p { margin-top: 6px; }
+.resultado-teste .teste-aviso { color: var(--alerta); font-weight: 600; }
+.linha-camera > .resultado-teste { grid-column: 1 / -1; }
+.lista-removidas { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.lista-removidas li { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.lista-removidas li > div:first-child { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.lista-removidas .nota { display: block; margin-top: 2px; }
+#dlg-remover fieldset small { display: block; margin: 0 0 10px 28px; color: var(--texto-2); }
+#dlg-remover p { margin-bottom: 12px; }
