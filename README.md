@@ -61,6 +61,8 @@ Antes, o app ficava de 15 a 20 s atrás do tempo real: o player espera 3 × `TAR
 - **A playlist guarda pelo menos 12 s** (e pelo menos `hls_window_size` segmentos), e começa a listar com 3 segmentos (antes esperava a janela inteira: 15 a 25 s sem vídeo depois de a câmera reconectar).
 - **`Devices.hls_segment_duration/size/window_size` valem desde a partida da câmera** (antes só se mudassem com ela rodando). 0 = padrão do motor. Antes, duração e tamanho 0 aplicados com a câmera no ar paravam o ao vivo dela.
 
+- **`/media/request`** (app, desktop, painel): usuário desativado (sem site e sem aplicativo) recebe 403 em tudo, inclusive com Basic e com sessão já aberta; arquivo e foto de gravação exigem a permissão "Gravações". A miniatura do ao vivo (`mode=livesnapshot`) não exige "Gravações". Antes só a câmera liberada era conferida.
+
 Ajustes sem build, no ambiente do `bc-server` (compose):
 - `G2W_HLS_SEGMENTO_ALVO` (s, padrão 1.0): alvo das câmeras com 0 no banco.
 - `G2W_HLS_HOLD_BACK_SEGMENTOS` (padrão 2.0; 0 tira a etiqueta) e `G2W_HLS_HOLD_BACK_MIN` (s, padrão 3.0).
