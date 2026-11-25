@@ -70,6 +70,15 @@ Content-Type: application/json; charset=utf-8
 - **O aplicativo deve:** parar os pedidos, mostrar "Sua conta foi acessada em outro aparelho" e voltar para a tela de entrada. **Não refazer o login sozinho**: um login novo toma a vez de volta e desliga o outro aparelho; dois aparelhos fazendo isso se derrubam sem parar. O login novo só acontece quando a pessoa toca em entrar.
 - No site, a página vai para `/login?motivo=outro-aparelho` e mostra a mesma frase.
 
+## Troca obrigatória de senha
+
+Usuário marcado para criar uma senha nova: o login responde `{"success": false, "message": "OK CHANGE_PASSWORD"}` e abre a sessão. Com a regra ligada:
+
+- **Esse login já faz do aparelho o dono**, igual ao login comum (só não vêm os campos `sessao_unica` e `aparelho_reconhecido`, porque a resposta não é a de sucesso).
+- Se outro aparelho faz o mesmo login enquanto o primeiro está na tela de nova senha, o primeiro é desligado: o `POST /ajax/changepwd.php` dele recebe o 401 `sessao_substituida` e **a senha não é trocada**. Quem troca é o aparelho que entrou por último.
+- Depois do `OK` do `changepwd.php` a sessão continua valendo e o aparelho continua o dono. Um login novo com a senha nova e o mesmo `X-G2W-Aparelho` não derruba nada e devolve `sessao_unica`; o cookie anterior desse mesmo aparelho também segue aceito.
+- Trocar a própria senha não libera a vez nem desliga ninguém.
+
 ## Pedidos com Basic (sem cookie)
 
 `/media/request.php` (miniatura, quadro e arquivo de gravação), `/media/trecho`, `/media/hls` e `/media/sessao` aceitam HTTP Basic sem sessão. (`/events/`, `/devices.php` e `/mapa/…` **não** aceitam Basic sozinho: sem cookie de sessão respondem `302` para `/login`, como sempre.) Com a regra ligada e usuário comum:
