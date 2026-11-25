@@ -16,7 +16,9 @@ $g2w_v = @filemtime(__DIR__.'/dist/css/entrar.css').'-'.@filemtime(__DIR__.'/dis
 <body>
     <main class="entrar">
         <div class="entrar-marca">
+<?php if (G2WMarca::logo()) { echo '            '.G2WMarca::logoImg(260, 96, 'logo-marca')."\n"; } else { ?>
             <img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="76" height="76">
+<?php } ?>
             <h1>Crie sua senha</h1>
             <p>No primeiro acesso é preciso trocar a senha recebida</p>
         </div>

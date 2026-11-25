@@ -51,6 +51,10 @@ h1, p { margin: 0; }
 .entrar-marca img { width: 76px; height: 76px; border-radius: 18px; display: block; margin-bottom: 14px; }
 .entrar-marca h1 { font-size: 1.5rem; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; }
 .entrar-marca h1 span { color: var(--verde); }
+/* logo própria da instalação (lib/Marca.php): entra no lugar do ícone e do nome */
+.entrar-marca img.logo-marca { width: auto; height: auto; max-width: min(100%, 260px); max-height: 96px; border-radius: 0; margin-bottom: 0; }
+.entrar-marca h1.entrar-logo { line-height: 0; margin-bottom: 10px; }
+.entrar-marca > img.logo-marca { margin-bottom: 14px; }
 .entrar-marca p { color: var(--texto-2); font-size: .9375rem; margin-top: 4px; }
 
 .entrar form { display: grid; gap: 14px; }

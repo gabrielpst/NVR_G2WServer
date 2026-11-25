@@ -49,14 +49,15 @@ Cada cliente roda a mesma imagem na sua LXC; o nome mostrado nas telas pode ser 
 - **Arquivo opcional `/etc/g2w/marca.json`**, fora do `www`, montado pelo compose (somente leitura, legível pelo usuário `www-data`):
 
   ```json
-  { "nome": "Ksolucoes" }
+  { "nome": "K Soluções", "logo": "logo.png" }
   ```
 
-  Campos, todos opcionais: `nome` (até 40 caracteres), `subtitulo` (até 80; a frase sob o nome na tela de entrada), `rodape` (até 60; o rodapé das telas de entrada) e `icone` (caminho de imagem dentro de `/img/`, ex.: `/img/arquivo.png`).
+  Campos, todos opcionais: `nome` (até 40 caracteres), `subtitulo` (até 80; a frase sob o nome na tela de entrada), `rodape` (até 60; o rodapé das telas de entrada) `icone` (caminho de imagem dentro de `/img/`, ex.: `/img/arquivo.png`) e `logo`.
+- **`logo`**: nome de um arquivo de imagem na mesma pasta `/etc/g2w/` (só o nome, sem caminho), montado junto com o `marca.json`. PNG, JPG ou SVG, reconhecido pelo conteúdo, até 512 KB. É servido em `/marca/logo`, sem login (a tela de entrada usa) e sem parâmetro que escolha arquivo. Com logo, a tela de entrada mostra a imagem no lugar do ícone e do nome, e o cabeçalho de `/gestao` e `/aovivo` também; o nome vira o texto alternativo. Logo ausente, grande demais, de outro tipo ou SVG com script: é ignorada e vale o nome em texto.
 - **Sem o arquivo, tudo sai como sempre** ("G2W Monitor"). JSON inválido, arquivo maior que 4 KB, sem permissão de leitura ou campo fora do formato: vale o padrão daquele campo, sem quebrar a tela. O valor é escapado na saída.
 - **Onde o nome aparece**: título da aba e nome na tela de entrada (`/login`), título da aba em `/changepwd`, e em `/gestao` e `/aovivo` o título da aba, o cabeçalho e o rodapé. Com nome próprio, o cabeçalho de `/gestao` e `/aovivo` mostra o ícone e o nome em texto no lugar do logotipo "G2W Monitor" (que é uma imagem).
 - **Onde não muda**: o que o aplicativo lê (realm do Basic, mensagens, nome do arquivo de trecho baixado), o painel antigo em `/monitor`, o favicon.
-- Código: `www/lib/Marca.php` (classe `G2WMarca`).
+- Código: `www/lib/Marca.php` (classe `G2WMarca`) e `www/ajax/marca.php` (rota `/marca/logo`).
 
 ### Baixar trecho de gravação por horário (branch `trecho-2026-11`, 2026-11-24, ainda sem build)
 

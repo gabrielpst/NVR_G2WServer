@@ -32,7 +32,7 @@ $v_js = @filemtime(SITE_PATH.'template/dist/js/gestao.js');
     <header class="topo">
         <div class="topo-linha">
             <a class="marca" href="/gestao" aria-label="<?php echo G2WMarca::h(G2WMarca::nome()); ?> — visão geral" translate="no">
-                <?php if (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40" fetchpriority="high"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high"><?php } ?>
+                <?php if (G2WMarca::logo()) { echo G2WMarca::logoImg(200, 40, 'logo-marca'); } elseif (G2WMarca::propria()) { ?><img src="<?php echo G2WMarca::h(G2WMarca::icone()); ?>" alt="" width="40" height="40" fetchpriority="high"><span class="marca-nome"><?php echo G2WMarca::h(G2WMarca::nome()); ?></span><?php } else { ?><img src="/img/logo.png" alt="G2W Monitor" width="109" height="46" fetchpriority="high"><?php } ?>
             </a>
             <div class="topo-acoes">
                 <a class="link-topo" href="/aovivo">Ao vivo</a>
