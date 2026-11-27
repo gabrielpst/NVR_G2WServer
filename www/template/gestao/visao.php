@@ -15,12 +15,14 @@ $disco = $discos ? $discos[0] : null;
 
 <section aria-labelledby="t-avisos" class="bloco">
     <h2 id="t-avisos" class="sr">Situação</h2>
+    <?php $infos = count($avisos) - $problemas; ?>
     <?php if (!$problemas) { ?>
         <div class="situacao situacao-ok">
             <span class="situacao-icone" aria-hidden="true">✓</span>
             <div>
                 <strong>Tudo funcionando</strong>
-                <span><?php echo $gravando; ?> de <?php echo $ativas; ?> câmeras gravando, disco e sistema sem alertas.</span>
+                <span><?php echo $gravando; ?> de <?php echo $ativas; ?> câmeras gravando, disco e sistema sem alertas.<?php
+                    if ($infos) { ?> <a href="/gestao/avisos"><?php echo $infos == 1 ? '1 informação' : $infos.' informações'; ?></a><?php } ?></span>
             </div>
         </div>
     <?php } else { ?>
@@ -28,23 +30,9 @@ $disco = $discos ? $discos[0] : null;
             <span class="situacao-icone" aria-hidden="true">!</span>
             <div>
                 <strong><?php echo $problemas == 1 ? '1 ponto precisa de atenção' : $problemas.' pontos precisam de atenção'; ?></strong>
-                <span>Veja abaixo o que está acontecendo.</span>
+                <span><a href="/gestao/avisos">Ver avisos</a></span>
             </div>
         </div>
-    <?php } ?>
-    <?php if ($avisos) { ?>
-        <ul class="avisos">
-            <?php foreach ($avisos as $a) { ?>
-                <li class="aviso aviso-<?php echo $h($a[0]); ?>">
-                    <span class="aviso-marca" aria-hidden="true"><?php echo $a[0] === 'info' ? 'i' : '!'; ?></span>
-                    <div class="aviso-texto">
-                        <strong><?php echo $h($a[1]); ?></strong>
-                        <span><?php echo $h($a[2]); ?></span>
-                    </div>
-                    <?php if ($a[3] !== '') { ?><a class="botao botao-leve" href="<?php echo $h($a[3]); ?>">Ver</a><?php } ?>
-                </li>
-            <?php } ?>
-        </ul>
     <?php } ?>
 </section>
 

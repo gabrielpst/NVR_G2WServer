@@ -108,13 +108,13 @@
             if (faixa) return;
             faixa = el('p', { id: 'visao-velha', class: 'faixa-velha', role: 'alert' }, [
                 'Não foi possível atualizar. O que aparece abaixo é a leitura das ' + $('#hora-pagina').textContent + '. ',
-                el('a', { href: '/gestao', text: 'Recarregar' })
+                el('a', { href: window.location.pathname, text: 'Recarregar' })
             ]);
             $('#conteudo').insertBefore(faixa, $('#conteudo').firstChild);
         }
         setInterval(function () {
             if (document.hidden) return;
-            fetch('/gestao', { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
+            fetch(window.location.pathname, { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
                 .then(function (r) { return r.ok && !r.redirected ? r.text() : null; })
                 .then(function (html) {
                     var doc = html ? new DOMParser().parseFromString(html, 'text/html') : null;
@@ -130,7 +130,28 @@
     }
 
     // ------------------------------------------------------------ câmeras
+    /* /gestao/cameras#so=N: o "Ver" de um aviso mostra só aquela câmera. */
+    function filtrarUmaCamera() {
+        var m = /(?:^#|&)so=(\d{1,9})(?:&|$)/.exec(window.location.hash);
+        var antiga = $('#so-uma');
+        if (antiga) antiga.parentNode.removeChild(antiga);
+        var forms = $$('[data-form-camera]');
+        var alvo = m ? forms.filter(function (f) { return f.getAttribute('data-id') === m[1]; })[0] : null;
+        forms.forEach(function (f) { f.hidden = !!alvo && f !== alvo; });
+        $$('#removidas, #armazenamento').forEach(function (s) { s.hidden = !!alvo; });
+        if (!m) return;
+        var barra = el('p', { id: 'so-uma', class: 'faixa-filtro', role: 'status' }, [
+            alvo ? 'Mostrando só a câmera ' + alvo.elements.nome.value + '. ' : 'Essa câmera não está mais na lista. ',
+            el('a', { href: '/gestao/cameras', text: 'Mostrar todas' })
+        ]);
+        var lista = $('[aria-label="Lista de câmeras"]');
+        lista.parentNode.insertBefore(barra, lista);
+        if (alvo) alvo.scrollIntoView({ block: 'start' });
+    }
+
     function iniciarCameras() {
+        filtrarUmaCamera();
+        window.addEventListener('hashchange', filtrarUmaCamera);
         function haPendente() {
             return $$('[data-form-camera] button[type="submit"], [data-form-disco] button[type="submit"]')
                 .some(function (b) { return !b.disabled; });
@@ -1162,7 +1183,7 @@
         });
     }
 
-    if (aba === 'visao') iniciarVisao();
+    if (aba === 'visao' || aba === 'avisos') iniciarVisao();
     if (aba === 'cameras') { iniciarCameras(); iniciarLocalizacao(); iniciarCadastro(); iniciarRemocao(); }
     if (aba === 'mapa') iniciarMapa();
     if (aba === 'usuarios') iniciarUsuarios();

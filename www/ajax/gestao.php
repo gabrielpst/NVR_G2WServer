@@ -70,6 +70,17 @@ class gestao extends Controller
 
     public function getData()
     {
+        return $this->pagina('visao', 'Visão geral', $this->dadosVisao());
+    }
+
+    /* Aba "Avisos": a lista completa que a visão geral só resume. */
+    public function getAvisos()
+    {
+        return $this->pagina('avisos', 'Avisos', $this->dadosVisao());
+    }
+
+    private function dadosVisao()
+    {
         $cams = G2WGestao::cameras();
         $bytes_dia = G2WGestao::bytesPorDia($cams);
         $discos = G2WGestao::discos($bytes_dia);
@@ -84,12 +95,15 @@ class gestao extends Controller
             if ($u['online']) $resumo['online']++;
         }
 
-        return $this->pagina('visao', 'Visão geral', array(
+        return array(
             'cams' => $cams, 'discos' => $discos, 'certs' => $certs, 'motor' => $motor,
             'resumo' => $resumo, 'bytes_dia' => $bytes_dia,
             'avisos' => $this->avisos($cams, $discos, $certs, $motor, $resumo),
-        ));
+        );
     }
+
+    /* Avisos: [nível, título, detalhe, link do "Ver"]. Nível 'info' é só
+     * informativo: aparece na tela de avisos, não conta como ponto de atenção. */
 
     private function avisos($cams, $discos, $certs, $motor, $resumo)
     {
@@ -101,7 +115,7 @@ class gestao extends Controller
         }
         foreach ($cams as $c) {
             if ($c['estado']['nivel'] === 'erro' || $c['estado']['nivel'] === 'alerta') {
-                $a[] = array($c['estado']['nivel'], $c['nome'].': '.mb_strtolower($c['estado']['rotulo']), $c['estado']['detalhe'], '/gestao/cameras');
+                $a[] = array($c['estado']['nivel'], $c['nome'].': '.mb_strtolower($c['estado']['rotulo']), $c['estado']['detalhe'], '/gestao/cameras#so='.intval($c['id']));
             }
         }
         foreach ($discos as $d) {

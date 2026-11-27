@@ -424,6 +424,8 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--verde); 
 .mapa .leaflet-popup-content a { display: inline-block; margin-top: 6px; margin-right: 10px; font-weight: 600; }
 .busca-endereco { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
 .busca-endereco .campo { flex: 1 1 260px; }
+.faixa-filtro { background: var(--verde-suave); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; }
+.faixa-filtro a { font-weight: 600; margin-left: 4px; }
 .coord-msg { margin: 6px 0 8px; font-size: .875rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .coord-msg:empty { display: none; }
 .coord-alerta { color: #8a4b00; }

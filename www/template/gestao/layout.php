@@ -2,6 +2,7 @@
 $h = array('G2WGestao', 'h');
 $abas = array(
     'visao' => array('/gestao', 'Visão geral'),
+    'avisos' => array('/gestao/avisos', 'Avisos'),
     'cameras' => array('/gestao/cameras', 'Câmeras'),
     'usuarios' => array('/gestao/usuarios', 'Usuários'),
     'gravacoes' => array('/gestao/gravacoes', 'Gravações'),
