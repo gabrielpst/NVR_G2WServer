@@ -1,6 +1,6 @@
 # Grupos de câmeras: desenho e migração
 
-Estado: **implementado** na branch `proxima-2026-11` (27/11/2026) e testado na bancada (ida e volta nos dois modos). A escolha do modo de migração (A ou B, abaixo) é do Gabriel; o roteiro aceita os dois (`--modo=todas`, padrão, ou `--modo=avulsas`). Nada muda numa instalação até o roteiro rodar nela.
+Estado: **implementado** na branch `proxima-2026-11` (27/11/2026) e testado na bancada (ida e volta nos dois modos). **Decisão do Gabriel (27/11): opção A**, grupo "Todas as câmeras" (`--modo=todas`, o padrão do roteiro); câmera nova sem grupo marcado por padrão. O modo B continua no roteiro só como alternativa. Nada muda numa instalação até o roteiro rodar nela.
 
 ## O que muda para quem usa
 
@@ -92,7 +92,7 @@ php grupos-cameras.php --desfazer     # volta ao modo antigo
 
 Administradores: nada é gravado para eles; a lista deles não é tocada pela migração. Depois dela, salvar um administrador pela tela Usuários zera a lista dele (vê todas), e rebaixar um administrador a comum aplica os grupos/avulsas que ele tiver (nenhum = não vê nada).
 
-**Escolha para o Gabriel — como os usuários entram nos grupos:**
+**Como os usuários entram nos grupos (escolhido: A, Gabriel em 27/11):**
 
 - **A (recomendada):** cria um grupo **"Todas as câmeras"** com todas as câmeras atuais. Quem vê todas hoje recebe esse grupo; quem tem bloqueio recebe as câmeras que vê como avulsas. Na K Soluções os 113 usuários que veem as 53 ficam com o grupo; ao cadastrar uma câmera nova, marcar "Todas as câmeras" já a entrega a todos eles. No Silvestre4, quem tem câmera bloqueada fica com avulsas.
 - **B:** tudo vira avulsa, sem grupo. O que se vê também não muda, mas câmera nova exigiria marcar usuário por usuário (ou criar um grupo depois e redistribuir).
