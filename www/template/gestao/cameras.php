@@ -13,9 +13,12 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
     <?php foreach ($cams as $c) { $f = 'cam'.$c['id']; ?>
     <form class="cartao linha-camera" data-form-camera data-id="<?php echo $c['id']; ?>" autocomplete="off" novalidate>
         <div class="linha-camera-imagem">
-            <?php if ($c['imagem_ts']) { ?>
-                <img src="/gestao/miniatura?id=<?php echo $c['id']; ?>&amp;t=<?php echo intval($c['imagem_ts']); ?>" alt="" loading="lazy" width="640" height="360">
-            <?php } else { ?><span class="sem-imagem">Sem imagem</span><?php } ?>
+            <?php $foto = $c['imagem_ts']
+                ? '<img src="/gestao/miniatura?id='.$c['id'].'&amp;t='.intval($c['imagem_ts']).'" alt="" loading="lazy" width="640" height="360">'
+                : '<span class="sem-imagem">Sem imagem</span>'; ?>
+            <?php if (!$c['desativada']) { ?>
+                <a class="abre-aovivo" href="/aovivo#camera=<?php echo $c['id']; ?>" aria-label="Ver <?php echo $h($c['nome']); ?> ao vivo"><?php echo $foto; ?><span class="selo-aovivo" aria-hidden="true">Ver ao vivo</span></a>
+            <?php } else { echo $foto; } ?>
             <p class="estado estado-<?php echo $h($c['estado']['nivel']); ?>"><span class="ponto" aria-hidden="true"></span><?php echo $h($c['estado']['rotulo']); ?></p>
         </div>
         <div class="linha-camera-campos">

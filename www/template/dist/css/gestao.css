@@ -211,7 +211,19 @@ a.cartao-resumo:hover { border-color: var(--verde-vivo); color: inherit; }
 .fatos div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px solid var(--borda); }
 .fatos dt { color: var(--texto-2); }
 .fatos dd { text-align: right; font-variant-numeric: tabular-nums; }
-.camera-link { margin-top: auto; padding-top: 8px; font-weight: 600; font-size: .9375rem; }
+.camera-links { margin-top: auto; padding-top: 8px; display: flex; gap: 16px; flex-wrap: wrap; }
+.camera-link { font-weight: 600; font-size: .9375rem; }
+/* clicar na imagem abre o ao vivo só daquela câmera (/aovivo#camera=N) */
+.abre-aovivo { display: block; position: relative; border-radius: 8px; color: inherit; }
+.camera-imagem .abre-aovivo { position: absolute; inset: 0; z-index: 1; border-radius: 0; }
+.camera-imagem .abre-aovivo:focus-visible { box-shadow: inset 0 0 0 3px #fff, var(--foco); }
+.selo-aovivo {
+  position: absolute; right: 8px; top: 8px; background: rgba(0, 0, 0, .72); color: #fff;
+  font-size: .75rem; font-weight: 600; padding: 3px 8px; border-radius: 6px; opacity: 0; transition: opacity .15s;
+}
+.abre-aovivo:hover .selo-aovivo, .abre-aovivo:focus-visible .selo-aovivo { opacity: 1; }
+@media (hover: none) { .selo-aovivo { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .selo-aovivo { transition: none; } }
 
 /* ---------- formulários ---------- */
 .campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

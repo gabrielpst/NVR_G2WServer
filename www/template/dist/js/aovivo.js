@@ -43,6 +43,27 @@
     // câmera em cada quadro. Sem preferência salva, abre com todas.
     var pref = lerPref();
 
+    /* /aovivo#camera=N (o clique na imagem da câmera no painel): abre só
+     * aquela câmera, uma por tela. Não grava a preferência: a grade de
+     * sempre volta na próxima visita, a menos que a pessoa mude algo aqui. */
+    var avisoUnica = null;
+    function camDoEndereco() {
+        var m = /(?:^#|&)camera=(\d{1,9})(?:&|$)/.exec(window.location.hash || '');
+        return m ? parseInt(m[1], 10) : null;
+    }
+    function aplicarEndereco() {
+        var id = camDoEndereco();
+        if (id === null) return false;
+        if (!porId[id]) {
+            avisoUnica = 'Essa câmera não está disponível no ao vivo (desligada ou sem permissão para o seu usuário).';
+            return false;
+        }
+        avisoUnica = null;
+        pref = { quantas: '1', quadros: [id] };
+        return true;
+    }
+    aplicarEndereco();
+
     function lerPref() {
         var p = null;
         try { p = JSON.parse(window.localStorage.getItem(CHAVE)); } catch (e) { p = null; }
@@ -478,6 +499,18 @@
         if (document.hidden || encerrado || !cameras.length) return;
         obterToken(cameras[0].id, true).catch(function () { /* os quadros tratam a queda */ });
     }, RENOVA_TOKEN_MS);
+
+    window.addEventListener('hashchange', function () {
+        if (aplicarEndereco()) montarGrade();
+        mostrarAvisoUnica();
+    });
+    function mostrarAvisoUnica() {
+        if (!avisoUnica || encerrado) return;
+        var a = $('#av-aviso');
+        a.textContent = avisoUnica;
+        a.hidden = false;
+    }
+    mostrarAvisoUnica();
 
     if (!cameras.length) {
         $('#av-sem-cameras').hidden = false;
