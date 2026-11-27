@@ -397,11 +397,13 @@
     // ---------------------------------------------------- formato da imagem
     // Por câmera (painel > Câmeras > Formato da imagem). O quadro continua do
     // mesmo tamanho; a imagem é esticada para a proporção escolhida, como a
-    // NUV faz. Automático: imagem 8:9 (960x1080) vira 16:9; o resto, como chega.
+    // NUV faz. Automático: 8:9 com altura até 1080 (960x1080) vira 16:9; o resto, como chega.
     var PROPORCAO = { '16:9': 16 / 9, '4:3': 4 / 3, 'empe': 9 / 16 };
     function proporcaoDe(formato, w, h) {
         if (PROPORCAO[formato]) return PROPORCAO[formato];
-        if (formato === 'auto' && w && h && w * 9 === h * 8) return 16 / 9;
+        // automático: só o canal de gravador espremido (8:9 com até 1080 de altura);
+        // 8:9 maior (lente dupla, duas imagens 16:9 empilhadas) fica como chega
+        if (formato === 'auto' && w && h && w * 9 === h * 8 && h <= 1080) return 16 / 9;
         return null;
     }
     function ajustarFormato(raiz, cam, video, foto) {

@@ -1049,7 +1049,8 @@ class G2WGestao
     // ------------------------------------------------- formato da imagem
 
     /* Formato de exibição por câmera (docs/api-formato-imagem.md).
-     * automatico: 960x1080 e outras 8:9 (canal de gravador que manda a
+     * automatico: 8:9 com altura até 1080 (960x1080, 640x720: canal de
+     * gravador que manda a
      * imagem espremida pela metade) vira 16:9; o resto, como chega.
      * proporção: largura/altura em que a imagem deve ser mostrada, esticada. */
     const FORMATOS = array(

@@ -149,21 +149,11 @@
         if (alvo) alvo.scrollIntoView({ block: 'start' });
     }
 
-    /* Formato da imagem: miniatura 8:9 (960x1080 espremida) no automático é
-     * mostrada esticada em 16:9, mesmo antes de o servidor refazer a foto. */
-    function formatoEfetivo(moldura) {
-        var img = $('img', moldura);
-        if (!img) return;
-        function ver() {
-            var oito = img.naturalWidth && img.naturalWidth * 9 === img.naturalHeight * 8;
-            if (moldura.getAttribute('data-formato') === 'auto' && oito) moldura.setAttribute('data-efetivo', '16:9');
-            else moldura.removeAttribute('data-efetivo');
-        }
-        if (img.complete) ver();
-        img.addEventListener('load', ver);
-        return ver;
-    }
-    $$('.foto-moldura').forEach(formatoEfetivo);
+    /* Formato da imagem: no automático (e em "como chega") a miniatura é
+     * mostrada como o servidor a gerou: quem decide se estica é o atualizador
+     * de miniaturas, que vê o vídeo inteiro (a foto reduzida não diz se a
+     * câmera é 960x1080 espremida ou 2304x2592 de lente dupla). */
+    function formatoEfetivo() { return null; }
 
     function iniciarCameras() {
         filtrarUmaCamera();
