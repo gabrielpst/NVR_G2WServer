@@ -131,6 +131,8 @@ $disco = $discos ? $discos[0] : null;
                 </dl>
                 <p class="camera-links">
                     <a class="camera-link" href="/gestao/gravacoes#camera=<?php echo $c['id']; ?>">Ver gravações<span class="sr"> de <?php echo $h($c['nome']); ?></span></a>
+                    <a class="camera-link" href="/ajax/editip.php?id=<?php echo $c['id']; ?>" target="_blank" rel="noopener"
+                        title="Abre em outra aba. Salvar lá reinicia a gravação desta câmera por alguns segundos.">Editar<span class="sr"> todos os ajustes de <?php echo $h($c['nome']); ?> (abre em outra aba; salvar lá reinicia a gravação desta câmera por alguns segundos)</span><span aria-hidden="true"> ↗</span></a>
                 </p>
             </div>
         </li>

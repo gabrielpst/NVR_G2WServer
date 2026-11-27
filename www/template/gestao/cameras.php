@@ -64,6 +64,9 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
         <div class="linha-camera-acoes">
             <button type="submit" class="botao botao-principal" disabled>Salvar</button>
             <a class="botao botao-leve" href="/gestao/gravacoes#camera=<?php echo $c['id']; ?>">Gravações</a>
+            <a class="botao botao-leve" href="/ajax/editip.php?id=<?php echo $c['id']; ?>" target="_blank" rel="noopener"
+                title="Abre em outra aba. Salvar lá reinicia a gravação desta câmera por alguns segundos."
+                aria-label="Editar todos os ajustes de <?php echo $h($c['nome']); ?> (abre em outra aba; salvar lá reinicia a gravação desta câmera por alguns segundos)">Editar tudo<span class="nota-botao" aria-hidden="true"> ↗</span></a>
             <?php if ($c['fonte_editavel']) { ?>
             <button type="button" class="botao botao-leve" data-testar="<?php echo $c['id']; ?>" aria-label="Testar a conexão de <?php echo $h($c['nome']); ?>">Testar conexão</button>
             <?php } ?>
