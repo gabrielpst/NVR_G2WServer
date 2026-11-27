@@ -86,6 +86,9 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
                 aria-label="Remover a câmera <?php echo $h($c['nome']); ?>">Remover</button>
         </div>
         <div class="resultado-teste" data-teste-de="<?php echo $c['id']; ?>" role="status" aria-live="polite" hidden></div>
+        <?php if ($grupos_ligados) { ?>
+        <p class="linha-camera-grupos"><span class="rotulo">Grupos</span> <?php echo $c['grupos'] ? $h(implode(', ', $c['grupos'])) : 'Nenhum: só administradores veem esta câmera.'; ?> <a href="/gestao/grupos">Mudar</a></p>
+        <?php } ?>
         <div class="linha-camera-local" data-local-de="<?php echo $c['id']; ?>">
             <span class="rotulo">Localização no mapa</span>
             <span class="local-texto" data-local-texto><?php
@@ -257,7 +260,21 @@ foreach ($cams as $c) $locais_json[] = array('id' => $c['id'], 'nome' => $c['nom
             <span class="local-texto" id="n-local-texto">Não definida</span>
             <button type="button" class="botao" id="n-local">Definir</button>
         </div>
+        <?php if ($grupos_ligados) { ?>
+        <fieldset class="opcoes">
+            <legend>Grupos (quem pode ver)</legend>
+            <?php if ($grupos) { ?>
+            <div class="lista-cameras">
+                <?php foreach ($grupos as $g) { ?>
+                <label class="opcao"><input type="checkbox" name="grupo" value="<?php echo intval($g['id']); ?>"> <?php echo $h($g['nome']); ?> (<?php echo intval($g['usuarios']); ?> usuário<?php echo $g['usuarios'] == 1 ? '' : 's'; ?>)</label>
+                <?php } ?>
+            </div>
+            <?php } else { ?><p class="vazio">Nenhum grupo criado ainda (aba <a href="/gestao/grupos">Grupos</a>).</p><?php } ?>
+            <small>Sem grupo marcado, só administradores veem a câmera até ela entrar num grupo ou ser dada avulsa a alguém em Usuários.</small>
+        </fieldset>
+        <?php } else { ?>
         <p class="nota">A câmera nova fica liberada para todos os usuários. Para restringir, abra a aba <a href="/gestao/usuarios">Usuários</a> depois de adicionar.</p>
+        <?php } ?>
         <p class="erro-form" role="alert" hidden></p>
         <div class="dialogo-acoes">
             <button type="button" class="botao" data-fechar>Cancelar</button>

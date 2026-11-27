@@ -122,6 +122,12 @@ class update extends Controller {
 		data::responseJSON($status, $result);
 	}
     private function editAccessList(){
+        // G2W 2026-11: com os grupos de câmeras ligados a lista é calculada
+        // pelo painel; gravar aqui desfaria o cálculo.
+        if (G2WGestao::gruposLigados()) {
+            data::responseJSON(false, 'As câmeras de cada usuário agora são definidas em Painel > Usuários (grupos e câmeras avulsas).');
+            return;
+        }
         $cams = Inp::gp_arr('cams');
         $cam_ids = Array();
         if (!empty($cams)) {

@@ -52,7 +52,7 @@ O `snapshot-updater` (sobe pelo entrypoint) guarda um JPEG por câmera em `/var/
 
 ### Próxima versão do servidor (branch `proxima-2026-11`, 2026-11-27, ainda sem build)
 
-Sobre `aovivo-atraso-2026-11`. Só painel (PHP/JS) e miniaturas; o motor não muda.
+Sobre `aovivo-atraso-2026-11`. Só painel (PHP/JS), miniaturas e roteiros; o motor não muda.
 
 - **Imagem abre o ao vivo:** clicar na imagem da câmera (Câmeras e Visão geral) abre `/aovivo#camera=N`, uma câmera por tela, só aquela, sem trocar a grade salva da pessoa.
 - **Editar tudo:** botão ao lado de Gravações leva a `/ajax/editip.php?id=N` em outra aba, com o aviso de que salvar lá reinicia a gravação da câmera por alguns segundos.
@@ -60,6 +60,7 @@ Sobre `aovivo-atraso-2026-11`. Só painel (PHP/JS) e miniaturas; o motor não mu
 - **Avisos:** a visão geral mostra só "N pontos precisam de atenção" e o link para a aba nova `/gestao/avisos`; o Ver de câmera abre `/gestao/cameras#so=N` (só ela); usuários sem senha própria são informação, não ponto de atenção.
 - **Formato da imagem por câmera** (Automático, 16:9, 4:3, Em pé, Como chega), em Câmeras, com prévia antes de salvar; tabela `G2WPainelFormatos`, sem reinício e sem tocar na gravação. Automático estica imagem 8:9 (960×1080 de canal de gravador) para 16:9, como a NUV. Vale nas miniaturas do painel, no `/aovivo` e na miniatura do app (o `snapshot-updater` já gera a foto no formato). Rota para o app: `GET /media/formatos`, contrato em `docs/api-formato-imagem.md`.
 - Rodapé do `/aovivo` sem o atraso antigo de "10 a 20 segundos".
+- **Grupos de câmeras** (aba nova `/gestao/grupos`; Usuários com grupos + câmeras avulsas; grupos no cadastro de câmera). Câmera nova só aparece para quem tem o grupo dela ou a recebe avulsa; mudar um grupo vale na hora (ao vivo já aberto para em até 15 s). As tabelas do painel são a fonte; `Users.access_device_list` (lista de bloqueio que o motor, o app e o desktop leem) é recalculada, e vira `TEXT` (sem o limite de 255). **Só vale depois de rodar a migração** `tools/grupos-cameras.php --migrar [--modo=todas|avulsas]` na instalação (`--simular`, `--conferir`, `--desfazer`); a migração confere usuário por usuário que ninguém passa a ver nada diferente. Editor antigo de permissões passa a recusar; `tools/importar-usuarios.php --grupo=NOME`. Desenho e volta: `docs/grupos-de-cameras.md`. Teste do que cada usuário vê: `tools/testes/visibilidade.php`.
 
 ### Ao vivo com menos atraso (branch `aovivo-atraso-2026-11`, 2026-11-25, ainda sem build de produção)
 

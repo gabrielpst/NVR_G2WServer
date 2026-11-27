@@ -13,12 +13,15 @@
  *   --senha-arquivo   arquivo com a senha inicial (uma linha). A senha nunca
  *                     vai na linha de comando nem aparece na saída.
  *   -                 lê o JSON da entrada padrão
+ *   --grupo=NOME      com os grupos de câmeras ligados (docs/grupos-de-cameras.md):
+ *                     os criados entram nesse grupo. Sem ele, não veem câmera
+ *                     nenhuma até alguém dar grupo ou avulsas em Usuários.
  *
  * Cada item: login, nome, email (opcional).
  *
  * Regras:
  *  - todo usuário entra comum (sem administração), com acesso por app e site,
- *    vendo todas as câmeras, sem baixar gravações, e marcado para trocar a
+ *    vendo todas as câmeras (com os grupos ligados: as do --grupo), sem baixar gravações, e marcado para trocar a
  *    senha no primeiro acesso;
  *  - login que já existe (sem diferenciar maiúsculas) é pulado, nunca alterado;
  *  - tudo numa transação: se um falhar, nada é gravado.
@@ -39,9 +42,10 @@ require_once lib_path.'Gestao.php';
 
 function fim($codigo, $msg) { fwrite(STDERR, $msg."\n"); exit($codigo); }
 
-$simular = false; $senhaArq = null; $origem = null;
+$simular = false; $senhaArq = null; $origem = null; $grupoNome = null;
 foreach (array_slice($argv, 1) as $arg) {
     if ($arg === '--simular') $simular = true;
+    elseif (strpos($arg, '--grupo=') === 0) $grupoNome = substr($arg, 8);
     elseif (strpos($arg, '--senha-arquivo=') === 0) $senhaArq = substr($arg, 16);
     elseif ($arg === '-' || ($arg !== '' && $arg[0] !== '-')) $origem = $arg;
     else fim(2, 'Opção desconhecida: '.$arg);
@@ -56,6 +60,16 @@ if (($v = G2WGestao::validarSenha($senha)) !== true) fim(2, 'Senha inicial recus
 $bruto = ($origem === '-') ? stream_get_contents(STDIN) : @file_get_contents($origem);
 $lista = json_decode((string)$bruto, true);
 if (!is_array($lista)) fim(2, 'A lista não é um JSON válido.');
+
+$grupos = G2WGestao::gruposLigados();
+$grupoId = 0;
+if ($grupoNome !== null) {
+    if (!$grupos) fim(2, '--grupo só vale com os grupos de câmeras ligados nesta instalação.');
+    $g = G2WGestao::q("SELECT id FROM G2WGrupos WHERE nome=?", 's', array(trim($grupoNome)));
+    if (!$g) fim(2, 'Grupo não encontrado: '.$grupoNome);
+    $grupoId = intval($g[0]['id']);
+}
+if ($grupos && !$grupoId) echo "Aviso: grupos de câmeras ligados e sem --grupo: os usuários criados não verão câmera nenhuma até receberem grupo ou câmeras em Usuários.\n";
 
 $existentes = array();
 foreach (G2WGestao::q("SELECT username FROM Users") as $u) $existentes[strtolower($u['username'])] = true;
@@ -86,9 +100,14 @@ try {
         $salt = data::getRandomString(4);
         G2WGestao::q("INSERT INTO Users (username, password, salt, name, email, phone, notes, access_setup, access_remote,
             access_web, access_backup, access_relay, access_device_list, access_ptz_list, change_password)
-            VALUES (?, ?, ?, ?, ?, '', ?, 0, 1, 1, 0, 0, '', '', 1)", 'ssssss',
-            array($n[0], G2WGestao::hashSenha($senha, $salt), $salt, $n[1], $n[2], 'Importado em '.date('Y-m-d')));
+            VALUES (?, ?, ?, ?, ?, '', ?, 0, 1, 1, 0, 0, ?, '', 1)", 'sssssss',
+            array($n[0], G2WGestao::hashSenha($senha, $salt), $salt, $n[1], $n[2], 'Importado em '.date('Y-m-d'), $grupos ? G2WGestao::bloqueioTotal() : ''));
+        if ($grupoId) {
+            $u = G2WGestao::q("SELECT id FROM Users WHERE username=?", 's', array($n[0]));
+            G2WGestao::q("INSERT INTO G2WUsuarioGrupos (user_id, grupo_id) VALUES (?, ?)", 'ii', array(intval($u[0]['id']), $grupoId));
+        }
     }
+    if ($grupos) G2WGestao::recalcularBloqueios(null, false);
     data::query("COMMIT", true);
 } catch (Throwable $ex) {
     data::query("ROLLBACK", true);

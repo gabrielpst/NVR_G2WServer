@@ -681,6 +681,12 @@ class G2WGestao
         $id = intval($novo[0]['id']);
         self::removerLocal($id);   // id reaproveitado depois de restauração de banco não herda posição antiga
         if ($local) self::salvarLocal($id, $local[0], $local[1], $local[2]);
+        // grupos de câmeras: só quem tem um dos grupos marcados passa a vê-la
+        try {
+            self::cameraNovaNosGrupos($id, isset($e['grupos']) && is_array($e['grupos']) ? $e['grupos'] : array());
+        } catch (Throwable $ex) {
+            error_log('G2W gestao: grupos da camera nova: '.$ex->getMessage());
+        }
         return $id;
     }
 
@@ -1256,6 +1262,316 @@ class G2WGestao
         $hz = intval(@shell_exec('getconf CLK_TCK 2>/dev/null')) ?: 100;
         $ini = intval($b[1]) + intdiv(intval($campos[19]), $hz);
         return ($ini > 0 && $ini <= time() + 5) ? $ini : null;
+    }
+
+    // ---------------------------------------------------- grupos de câmeras
+    //
+    // Desenho em docs/grupos-de-cameras.md. Resumo: as tabelas G2WGrupos,
+    // G2WGrupoCameras, G2WUsuarioGrupos e G2WUsuarioCameras (avulsas) são a
+    // fonte da verdade; Users.access_device_list continua sendo a lista de
+    // BLOQUEIO que o motor, o app e o desktop leem, e é RECALCULADA aqui:
+    //   bloqueio(u) = todos os ids de Devices − (avulsas(u) ∪ câmeras dos grupos(u))
+    // Só vale depois da migração (tools/grupos-cameras.php), que liga
+    // G2W_PERMISSAO_GRUPOS. Sem ela, tudo funciona como antes.
+    // Administrador fica fora: a lista dele não é recalculada.
+
+    const GRUPOS_PARAM = 'G2W_PERMISSAO_GRUPOS';
+    const GRUPOS_VISTO_PARAM = 'G2W_GRUPOS_VISTO';
+    const GRUPO_NOME_MAX = 60;
+
+    private static $gruposLigados = null;
+
+    public static function gruposLigados()
+    {
+        if (self::$gruposLigados !== null) return self::$gruposLigados;
+        try {
+            $r = self::q("SELECT value FROM GlobalSettings WHERE parameter=?", 's', array(self::GRUPOS_PARAM));
+            self::$gruposLigados = ($r && (string)$r[0]['value'] === '1');
+        } catch (Throwable $e) {
+            error_log('G2W gestao: grupos ligados: '.$e->getMessage());
+            self::$gruposLigados = false;
+        }
+        return self::$gruposLigados;
+    }
+
+    /* Só a migração cria (e o --desfazer pode apagar). */
+    public static function criarTabelasGrupos()
+    {
+        self::q("CREATE TABLE IF NOT EXISTS G2WGrupos (
+            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(60) NOT NULL,
+            criado_em INT NOT NULL,
+            UNIQUE KEY nome (nome)
+        ) DEFAULT CHARSET=utf8mb4");
+        self::q("CREATE TABLE IF NOT EXISTS G2WGrupoCameras (
+            grupo_id INT NOT NULL, device_id INT NOT NULL,
+            PRIMARY KEY (grupo_id, device_id), KEY device (device_id)
+        ) DEFAULT CHARSET=ascii");
+        self::q("CREATE TABLE IF NOT EXISTS G2WUsuarioGrupos (
+            user_id INT NOT NULL, grupo_id INT NOT NULL,
+            PRIMARY KEY (user_id, grupo_id), KEY grupo (grupo_id)
+        ) DEFAULT CHARSET=ascii");
+        self::q("CREATE TABLE IF NOT EXISTS G2WUsuarioCameras (
+            user_id INT NOT NULL, device_id INT NOT NULL,
+            PRIMARY KEY (user_id, device_id), KEY device (device_id)
+        ) DEFAULT CHARSET=ascii");
+        self::q("CREATE TABLE IF NOT EXISTS G2WGruposAntes (
+            user_id INT NOT NULL PRIMARY KEY,
+            access_device_list TEXT NOT NULL,
+            migrado_em INT NOT NULL
+        ) DEFAULT CHARSET=ascii");
+    }
+
+    public static function validarNomeGrupo($nome)
+    {
+        $nome = trim(preg_replace('/\s+/u', ' ', (string)$nome));
+        if ($nome === '' || mb_strlen($nome) > self::GRUPO_NOME_MAX) throw new InvalidArgumentException('O nome do grupo deve ter de 1 a '.self::GRUPO_NOME_MAX.' caracteres.');
+        if (preg_match('/[\x00-\x1f\x7f]/', $nome)) throw new InvalidArgumentException('O nome do grupo tem caractere inválido.');
+        return $nome;
+    }
+
+    /* [{id, nome, cameras:[ids], usuarios: n}] em ordem de nome. */
+    public static function grupos()
+    {
+        if (!self::gruposLigados()) return array();
+        $res = array();
+        foreach (self::q("SELECT id, nome FROM G2WGrupos ORDER BY nome") as $g) {
+            $res[intval($g['id'])] = array('id' => intval($g['id']), 'nome' => (string)$g['nome'], 'cameras' => array(), 'usuarios' => 0);
+        }
+        foreach (self::q("SELECT grupo_id, device_id FROM G2WGrupoCameras") as $r) {
+            if (isset($res[intval($r['grupo_id'])])) $res[intval($r['grupo_id'])]['cameras'][] = intval($r['device_id']);
+        }
+        foreach (self::q("SELECT g.grupo_id, COUNT(*) AS n FROM G2WUsuarioGrupos g JOIN Users u ON u.id=g.user_id
+                WHERE u.access_setup=0 GROUP BY g.grupo_id") as $r) {
+            if (isset($res[intval($r['grupo_id'])])) $res[intval($r['grupo_id'])]['usuarios'] = intval($r['n']);
+        }
+        return array_values($res);
+    }
+
+    /* user_id => {grupos:[ids], avulsas:[ids]} de todos os usuários. */
+    public static function permissoesDosUsuarios()
+    {
+        $res = array();
+        if (!self::gruposLigados()) return $res;
+        foreach (self::q("SELECT user_id, grupo_id FROM G2WUsuarioGrupos") as $r) $res[intval($r['user_id'])]['grupos'][] = intval($r['grupo_id']);
+        foreach (self::q("SELECT user_id, device_id FROM G2WUsuarioCameras") as $r) $res[intval($r['user_id'])]['avulsas'][] = intval($r['device_id']);
+        foreach ($res as $k => $v) $res[$k] += array('grupos' => array(), 'avulsas' => array());
+        return $res;
+    }
+
+    /* Ids que existem, de uma lista vinda do pedido (descarta o resto). */
+    private static function filtrarIds($ids, $tabela)
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', is_array($ids) ? $ids : array()), function ($i) { return $i > 0; })));
+        if (!$ids) return array();
+        $existe = array_map('intval', array_column(self::q("SELECT id FROM $tabela WHERE id IN (".implode(',', $ids).")"), 'id'));
+        return array_values(array_intersect($ids, $existe));
+    }
+
+    /* Grava grupos e avulsas de usuários comuns (substitui o que tinham) e
+     * recalcula a lista deles. Administrador é ignorado. */
+    public static function definirPermissoes(array $userIds, $grupos, $avulsas)
+    {
+        $grupos = self::filtrarIds($grupos, 'G2WGrupos');
+        $avulsas = self::filtrarIds($avulsas, 'Devices');
+        $comuns = array();
+        foreach (self::filtrarIds($userIds, 'Users') as $u) {
+            $r = self::q("SELECT access_setup FROM Users WHERE id=?", 'i', array($u));
+            if ($r && !intval($r[0]['access_setup'])) $comuns[] = $u;
+        }
+        if (!$comuns) return 0;
+        data::query("START TRANSACTION", true);
+        try {
+            $lista = implode(',', $comuns);
+            self::q("DELETE FROM G2WUsuarioGrupos WHERE user_id IN ($lista)");
+            self::q("DELETE FROM G2WUsuarioCameras WHERE user_id IN ($lista)");
+            foreach ($comuns as $u) {
+                foreach ($grupos as $g) self::q("INSERT INTO G2WUsuarioGrupos (user_id, grupo_id) VALUES (?, ?)", 'ii', array($u, $g));
+                foreach ($avulsas as $c) self::q("INSERT INTO G2WUsuarioCameras (user_id, device_id) VALUES (?, ?)", 'ii', array($u, $c));
+            }
+            self::recalcularBloqueios($comuns, false);
+            data::query("COMMIT", true);
+        } catch (Throwable $e) {
+            data::query("ROLLBACK", true);
+            throw $e;
+        }
+        return count($comuns);
+    }
+
+    /* Cria ou altera um grupo e as câmeras dele; recalcula quem o tem. */
+    public static function salvarGrupo($id, $nome, $cameras)
+    {
+        $nome = self::validarNomeGrupo($nome);
+        $cameras = self::filtrarIds($cameras, 'Devices');
+        $dup = self::q("SELECT id FROM G2WGrupos WHERE nome=? AND id<>?", 'si', array($nome, intval($id)));
+        if ($dup) throw new InvalidArgumentException('Já existe um grupo com esse nome.');
+        data::query("START TRANSACTION", true);
+        try {
+            if ($id) {
+                if (!self::q("SELECT id FROM G2WGrupos WHERE id=?", 'i', array(intval($id)))) throw new InvalidArgumentException('Grupo não encontrado.');
+                self::q("UPDATE G2WGrupos SET nome=? WHERE id=?", 'si', array($nome, intval($id)));
+            } else {
+                self::q("INSERT INTO G2WGrupos (nome, criado_em) VALUES (?, ?)", 'si', array($nome, time()));
+                $r = self::q("SELECT id FROM G2WGrupos WHERE nome=?", 's', array($nome));
+                $id = intval($r[0]['id']);
+            }
+            self::q("DELETE FROM G2WGrupoCameras WHERE grupo_id=?", 'i', array($id));
+            foreach ($cameras as $c) self::q("INSERT INTO G2WGrupoCameras (grupo_id, device_id) VALUES (?, ?)", 'ii', array($id, $c));
+            self::recalcularBloqueios(self::usuariosDoGrupo($id), false);
+            data::query("COMMIT", true);
+        } catch (Throwable $e) {
+            data::query("ROLLBACK", true);
+            throw $e;
+        }
+        return $id;
+    }
+
+    public static function apagarGrupo($id)
+    {
+        $id = intval($id);
+        data::query("START TRANSACTION", true);
+        try {
+            $afetados = self::usuariosDoGrupo($id);
+            self::q("DELETE FROM G2WUsuarioGrupos WHERE grupo_id=?", 'i', array($id));
+            self::q("DELETE FROM G2WGrupoCameras WHERE grupo_id=?", 'i', array($id));
+            $n = self::q("DELETE FROM G2WGrupos WHERE id=?", 'i', array($id));
+            self::recalcularBloqueios($afetados, false);
+            data::query("COMMIT", true);
+        } catch (Throwable $e) {
+            data::query("ROLLBACK", true);
+            throw $e;
+        }
+        return $n;
+    }
+
+    /* Câmera nova: entra nos grupos pedidos e a lista de todos é recalculada
+     * (quem não tem o grupo dela passa a tê-la bloqueada). */
+    public static function cameraNovaNosGrupos($deviceId, $grupos)
+    {
+        if (!self::gruposLigados()) return;
+        foreach (self::filtrarIds($grupos, 'G2WGrupos') as $g) {
+            self::q("INSERT IGNORE INTO G2WGrupoCameras (grupo_id, device_id) VALUES (?, ?)", 'ii', array($g, intval($deviceId)));
+        }
+        self::recalcularBloqueios(null);
+    }
+
+    public static function gruposDaCamera($deviceId)
+    {
+        if (!self::gruposLigados()) return array();
+        return array_map('intval', array_column(self::q("SELECT grupo_id FROM G2WGrupoCameras WHERE device_id=?", 'i', array(intval($deviceId))), 'grupo_id'));
+    }
+
+    private static function usuariosDoGrupo($id)
+    {
+        return array_map('intval', array_column(self::q("SELECT user_id FROM G2WUsuarioGrupos WHERE grupo_id=?", 'i', array(intval($id))), 'user_id'));
+    }
+
+    /* Câmeras que cada usuário comum pode ver pelas tabelas (avulsas ∪ grupos). */
+    public static function permitidasPorTabela($userIds = null)
+    {
+        $filtro = '';
+        if ($userIds !== null) {
+            $userIds = array_values(array_filter(array_map('intval', $userIds)));
+            if (!$userIds) return array();
+            $filtro = ' AND u.id IN ('.implode(',', $userIds).')';
+        }
+        $res = array();
+        foreach (self::q("SELECT u.id FROM Users u WHERE u.access_setup=0".$filtro) as $u) $res[intval($u['id'])] = array();
+        foreach (self::q("SELECT uc.user_id, uc.device_id FROM G2WUsuarioCameras uc JOIN Users u ON u.id=uc.user_id WHERE u.access_setup=0".$filtro) as $r) {
+            $res[intval($r['user_id'])][intval($r['device_id'])] = true;
+        }
+        foreach (self::q("SELECT ug.user_id, gc.device_id FROM G2WUsuarioGrupos ug JOIN G2WGrupoCameras gc ON gc.grupo_id=ug.grupo_id
+                JOIN Users u ON u.id=ug.user_id WHERE u.access_setup=0".$filtro) as $r) {
+            $res[intval($r['user_id'])][intval($r['device_id'])] = true;
+        }
+        return $res;
+    }
+
+    /* Reescreve Users.access_device_list dos usuários comuns ($userIds, ou
+     * todos com null). Lista vazia quer dizer "vê tudo" para quem a lê: quem
+     * não pode ver nada recebe todos os ids. $transacao=false quando quem
+     * chama já abriu uma. Devolve quantas listas mudaram. */
+    public static function recalcularBloqueios($userIds = null, $transacao = true)
+    {
+        if (!self::gruposLigados()) return 0;
+        if ($transacao) data::query("START TRANSACTION", true);
+        try {
+            // vínculos de usuário/câmera/grupo que não existem mais
+            self::q("DELETE x FROM G2WUsuarioCameras x LEFT JOIN Users u ON u.id=x.user_id LEFT JOIN Devices d ON d.id=x.device_id WHERE u.id IS NULL OR d.id IS NULL");
+            self::q("DELETE x FROM G2WUsuarioGrupos x LEFT JOIN Users u ON u.id=x.user_id LEFT JOIN G2WGrupos g ON g.id=x.grupo_id WHERE u.id IS NULL OR g.id IS NULL");
+            self::q("DELETE x FROM G2WGrupoCameras x LEFT JOIN Devices d ON d.id=x.device_id LEFT JOIN G2WGrupos g ON g.id=x.grupo_id WHERE d.id IS NULL OR g.id IS NULL");
+
+            $todas = array_map('intval', array_column(self::q("SELECT id FROM Devices ORDER BY id"), 'id'));
+            $filtro = '';
+            if ($userIds !== null) {
+                $userIds = array_values(array_filter(array_map('intval', $userIds)));
+                if (!$userIds) { if ($transacao) data::query("COMMIT", true); return 0; }
+                $filtro = ' AND id IN ('.implode(',', $userIds).')';
+            }
+            $atuais = array();
+            foreach (self::q("SELECT id, access_device_list FROM Users WHERE access_setup=0".$filtro." FOR UPDATE") as $u) {
+                $atuais[intval($u['id'])] = (string)$u['access_device_list'];
+            }
+            $perm = self::permitidasPorTabela(array_keys($atuais) ?: array(0));
+            $mudou = 0;
+            foreach ($atuais as $id => $antes) {
+                $pode = isset($perm[$id]) ? $perm[$id] : array();
+                $bloq = array();
+                foreach ($todas as $d) if (!isset($pode[$d])) $bloq[] = $d;
+                $csv = implode(',', $bloq);
+                if ($csv !== $antes) {
+                    self::q("UPDATE Users SET access_device_list=? WHERE id=? AND access_setup=0", 'si', array($csv, $id));
+                    $mudou++;
+                }
+            }
+            if ($userIds === null) {
+                $maxD = $todas ? max($todas) : 0;
+                $r = self::q("SELECT COALESCE(MAX(id), 0) AS m FROM Users");
+                self::q("INSERT INTO GlobalSettings (parameter, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value=VALUES(value)",
+                    'ss', array(self::GRUPOS_VISTO_PARAM, $maxD.':'.intval($r[0]['m'])));
+            }
+            if ($transacao) data::query("COMMIT", true);
+        } catch (Throwable $e) {
+            if ($transacao) data::query("ROLLBACK", true);
+            throw $e;
+        }
+        if ($mudou) {
+            // o ao vivo já aberto percebe em até 15 s (cache da chave no motor)
+            error_log('G2W gestao: grupos: '.$mudou.' lista(s) de camera recalculada(s)');
+        }
+        return $mudou;
+    }
+
+    /* Lista de bloqueio com todas as câmeras (usuário que não vê nada). */
+    public static function bloqueioTotal()
+    {
+        return implode(',', array_map('intval', array_column(self::q("SELECT id FROM Devices ORDER BY id"), 'id')));
+    }
+
+    private static $redeConferida = false;
+
+    /* Rede de proteção, uma consulta por pedido autenticado: câmera ou
+     * usuário criado por um caminho que não recalculou (direto no banco,
+     * cadastro antigo) aparece aqui como id maior que o último visto. */
+    public static function conferirGrupos()
+    {
+        if (self::$redeConferida) return false;
+        self::$redeConferida = true;
+        try {
+            $r = self::q("SELECT
+                (SELECT value FROM GlobalSettings WHERE parameter=?) AS ligado,
+                (SELECT value FROM GlobalSettings WHERE parameter=?) AS visto,
+                (SELECT COALESCE(MAX(id), 0) FROM Devices) AS maxd,
+                (SELECT COALESCE(MAX(id), 0) FROM Users) AS maxu", 'ss', array(self::GRUPOS_PARAM, self::GRUPOS_VISTO_PARAM));
+            if (!$r || (string)$r[0]['ligado'] !== '1') return false;
+            self::$gruposLigados = true;
+            if ((string)$r[0]['visto'] === intval($r[0]['maxd']).':'.intval($r[0]['maxu'])) return false;
+            self::recalcularBloqueios(null);
+            return true;
+        } catch (Throwable $e) {
+            error_log('G2W gestao: conferir grupos: '.$e->getMessage());
+        }
+        return false;
     }
 
     // ----------------------------------------------------------- usuários

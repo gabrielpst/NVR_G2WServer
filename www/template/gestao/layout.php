@@ -5,6 +5,7 @@ $abas = array(
     'avisos' => array('/gestao/avisos', 'Avisos'),
     'cameras' => array('/gestao/cameras', 'Câmeras'),
     'usuarios' => array('/gestao/usuarios', 'Usuários'),
+    'grupos' => array('/gestao/grupos', 'Grupos'),
     'gravacoes' => array('/gestao/gravacoes', 'Gravações'),
     'mapa' => array('/gestao/mapa', 'Mapa'),
 );

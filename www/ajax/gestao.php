@@ -143,7 +143,13 @@ class gestao extends Controller
     public function getCameras()
     {
         $cams = $this->camerasComLocal();
+        $grupos = G2WGestao::grupos();
+        $nomes = array();
+        foreach ($grupos as $g) foreach ($g['cameras'] as $c) $nomes[$c][] = $g['nome'];
+        foreach ($cams as $k => $c) $cams[$k]['grupos'] = isset($nomes[$c['id']]) ? $nomes[$c['id']] : array();
         return $this->pagina('cameras', 'Câmeras', array(
+            'grupos_ligados' => G2WGestao::gruposLigados(),
+            'grupos' => $grupos,
             'cams' => $cams,
             'fabricantes' => G2WGestao::fabricantes(),
             'removidas' => G2WGestao::removidas(),
@@ -189,9 +195,20 @@ class gestao extends Controller
             if (in_array(intval($c['id']), $fora, true)) continue;
             $cams[] = array('id' => intval($c['id']), 'nome' => (string)$c['device_name']);
         }
+        $grupos_ligados = G2WGestao::gruposLigados();
+        if ($grupos_ligados) {
+            $perm = G2WGestao::permissoesDosUsuarios();
+            foreach ($us['lista'] as $k => $u) {
+                $p = isset($perm[$u['id']]) ? $perm[$u['id']] : array('grupos' => array(), 'avulsas' => array());
+                $us['lista'][$k]['grupos'] = $p['grupos'];
+                $us['lista'][$k]['avulsas'] = $p['avulsas'];
+            }
+        }
         return $this->pagina('usuarios', 'Usuários', array(
             'sessao_unica' => G2WGestao::sessaoUnicaLigada(),
+            'grupos_ligados' => $grupos_ligados,
             'dados' => array(
+                'grupos_ligados' => $grupos_ligados, 'grupos' => G2WGestao::grupos(),
                 'usuarios' => $us['lista'], 'cameras' => $cams, 'eu' => intval($this->user->info['id']),
                 'acessos_desde' => $desde, 'senha_min' => G2WGestao::SENHA_MIN, 'lote_max' => G2WGestao::LOTE_MAX,
             ),
@@ -686,19 +703,26 @@ class gestao extends Controller
         if ($novo || $senha !== '') {
             if (($v = G2WGestao::validarSenha($senha)) !== true) $this->falha(422, $v);
         }
-        $bloqueio = $this->bloqueioDoPedido($e);
+        // grupos de câmeras ligados: a lista vem de grupos + avulsas, não daqui
+        $grupos_ligados = G2WGestao::gruposLigados();
+        $bloqueio = $grupos_ligados ? ($admin ? '' : null) : $this->bloqueioDoPedido($e);
 
         if (G2WGestao::q("SELECT id FROM Users WHERE username=? AND id<>?", 'si', array($login, $id))) {
             $this->falha(422, 'Já existe um usuário com o login "'.$login.'".');
         }
 
         if ($novo) {
-            if ($bloqueio === null) $bloqueio = '';
+            // com grupos, nasce sem ver nada até as permissões serem gravadas
+            if ($bloqueio === null) $bloqueio = $grupos_ligados ? G2WGestao::bloqueioTotal() : '';
             $salt = data::getRandomString(4);
             G2WGestao::q("INSERT INTO Users (username, password, salt, name, email, phone, notes, access_setup, access_remote,
                 access_web, access_backup, access_relay, access_device_list, access_ptz_list, change_password)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, '', ?)", 'sssssssiiiisi',
                 array($login, G2WGestao::hashSenha($senha, $salt), $salt, $nome, $email, $tel, $obs, $admin, $app, $site, $grav, $bloqueio, $trocar));
+            if ($grupos_ligados && !$admin) {
+                $r = G2WGestao::q("SELECT id FROM Users WHERE username=?", 's', array($login));
+                $this->gravarPermissoes(array(intval($r[0]['id'])), $e);
+            }
             $this->json(array('ok' => true, 'msg' => 'Usuário '.$login.' criado.'));
         }
 
@@ -719,6 +743,11 @@ class gestao extends Controller
             $salt = data::getRandomString(4);
             G2WGestao::q("UPDATE Users SET password=?, salt=? WHERE id=?", 'ssi', array(G2WGestao::hashSenha($senha, $salt), $salt, $id));
             if ($id !== $eu) G2WGestao::derrubarSessoes(array($id));
+        }
+        if ($grupos_ligados && !$admin) {
+            // pedido sem as listas (cliente antigo): mantém o que estava e só recalcula
+            if (array_key_exists('grupos', $e) || array_key_exists('avulsas', $e)) $this->gravarPermissoes(array($id), $e);
+            else G2WGestao::recalcularBloqueios(array($id));
         }
         if (!$admin && !$site && !$app) G2WGestao::derrubarSessoes(array($id));
         $this->json(array('ok' => true, 'msg' => 'Usuário '.$login.' salvo.'));
@@ -741,7 +770,8 @@ class gestao extends Controller
         $app = !empty($e['app']) ? 1 : 0;
         $grav = !empty($e['gravacoes']) ? 1 : 0;
         if (!$site && !$app) $this->falha(422, 'Marque pelo menos um jeito de entrar: aplicativo ou site.');
-        $bloqueio = $this->bloqueioDoPedido($e);
+        $grupos_ligados = G2WGestao::gruposLigados();
+        $bloqueio = $grupos_ligados ? G2WGestao::bloqueioTotal() : $this->bloqueioDoPedido($e);
         if ($bloqueio === null) $bloqueio = '';
 
         $logins = array();
@@ -770,6 +800,12 @@ class gestao extends Controller
             data::query("ROLLBACK", true);
             error_log('G2W gestao: criacao em lote: '.$ex->getMessage());
             $this->falha(500, 'Não foi possível criar os usuários. Nada foi gravado.');
+        }
+        if ($grupos_ligados && $criados) {
+            $novos = array_values(array_diff(array_values($logins), $pulados));
+            $ids = array_map('intval', array_column(G2WGestao::q("SELECT id FROM Users WHERE username IN (".implode(',', array_fill(0, count($novos), '?')).")",
+                str_repeat('s', count($novos)), $novos), 'id'));
+            $this->gravarPermissoes($ids, $e);
         }
         $msg = $criados.' usuário(s) criado(s).';
         if ($pulados) $msg .= ' '.count($pulados).' já existia(m) e ficou(aram) como estava(m).';
@@ -851,6 +887,10 @@ class gestao extends Controller
 
             case 'definir_cameras':
                 if (!$comuns) $this->falha(422, 'Nenhum usuário comum selecionado.'.$nota);
+                if (G2WGestao::gruposLigados()) {
+                    $this->gravarPermissoes($comuns, $e);
+                    $this->json(array('ok' => true, 'msg' => 'Câmeras atualizadas para '.count($comuns).' usuário(s).'.$nota));
+                }
                 $bloqueio = $this->bloqueioDoPedido($e);
                 if ($bloqueio === null) $this->falha(422, 'Informe as câmeras.');
                 G2WGestao::q("UPDATE Users SET access_device_list=? WHERE id IN (".implode(',', array_fill(0, count($comuns), '?')).")",
@@ -864,6 +904,71 @@ class gestao extends Controller
 
     /* Lista "pode ver" do pedido -> lista de bloqueio. null quando o pedido
      * não trouxe a chave 'cameras' (quem chama decide: manter ou liberar). */
+    /* Grupos de câmeras: grava {grupos:[ids], avulsas:[ids]} do pedido. */
+    private function gravarPermissoes(array $ids, $e)
+    {
+        foreach (array('grupos', 'avulsas') as $k) {
+            if (isset($e[$k]) && !is_array($e[$k])) $this->falha(422, 'Lista de '.$k.' inválida.');
+        }
+        try {
+            G2WGestao::definirPermissoes($ids, isset($e['grupos']) ? $e['grupos'] : array(), isset($e['avulsas']) ? $e['avulsas'] : array());
+        } catch (Throwable $ex) {
+            error_log('G2W gestao: permissoes: '.$ex->getMessage());
+            $this->falha(500, 'Não foi possível gravar as câmeras do usuário. Tente de novo.');
+        }
+    }
+
+    // ------------------------------------------------- grupos de câmeras
+
+    /* Aba "Grupos" (só com os grupos ligados pela migração). */
+    public function getGrupos()
+    {
+        $cams = array();
+        foreach (G2WGestao::cameras() as $c) {
+            if (!in_array($c['id'], G2WGestao::idsRemovidas(), true)) $cams[] = array('id' => $c['id'], 'nome' => $c['nome'], 'desativada' => $c['desativada']);
+        }
+        return $this->pagina('grupos', 'Grupos', array(
+            'ligado' => G2WGestao::gruposLigados(),
+            'dados' => array('grupos' => G2WGestao::grupos(), 'cameras' => $cams),
+        ));
+    }
+
+    /* POST /gestao/grupo {id?, nome, cameras:[ids]} */
+    public function postGrupo()
+    {
+        if (!G2WGestao::gruposLigados()) $this->falha(409, 'Os grupos de câmeras ainda não foram ligados nesta instalação.');
+        $e = $this->entrada();
+        $id = empty($e['id']) ? 0 : $this->inteiro($e, 'id', 1, PHP_INT_MAX);
+        if (isset($e['cameras']) && !is_array($e['cameras'])) $this->falha(422, 'Lista de câmeras inválida.');
+        try {
+            $id = G2WGestao::salvarGrupo($id, isset($e['nome']) ? $e['nome'] : '', isset($e['cameras']) ? $e['cameras'] : array());
+        } catch (InvalidArgumentException $ex) {
+            $this->falha(422, $ex->getMessage());
+        } catch (Throwable $ex) {
+            error_log('G2W gestao: salvar grupo: '.$ex->getMessage());
+            $this->falha(500, 'Não foi possível salvar o grupo. Nada foi alterado.');
+        }
+        error_log('g2w-grupo-salvo usuario='.intval($_SESSION['id']).' grupo='.$id);
+        $this->json(array('ok' => true, 'id' => $id, 'msg' => 'Grupo salvo. Já vale para os usuários dele.'));
+    }
+
+    /* POST /gestao/grupo-apagar {id} */
+    public function postGrupoApagar()
+    {
+        if (!G2WGestao::gruposLigados()) $this->falha(409, 'Os grupos de câmeras ainda não foram ligados nesta instalação.');
+        $e = $this->entrada();
+        $id = $this->inteiro($e, 'id', 1, PHP_INT_MAX);
+        try {
+            $n = G2WGestao::apagarGrupo($id);
+        } catch (Throwable $ex) {
+            error_log('G2W gestao: apagar grupo: '.$ex->getMessage());
+            $this->falha(500, 'Não foi possível apagar o grupo. Nada foi alterado.');
+        }
+        if (!$n) $this->falha(404, 'Grupo não encontrado.');
+        error_log('g2w-grupo-apagado usuario='.intval($_SESSION['id']).' grupo='.$id);
+        $this->json(array('ok' => true, 'msg' => 'Grupo apagado. Quem via câmeras só por ele deixou de vê-las.'));
+    }
+
     private function bloqueioDoPedido($e)
     {
         if (!array_key_exists('cameras', $e)) return null;

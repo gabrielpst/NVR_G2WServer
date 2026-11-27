@@ -111,10 +111,18 @@ $json = json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
             <label class="opcao"><input type="checkbox" name="trocar_senha"> Criar uma senha nova no próximo acesso</label>
             <label class="opcao"><input type="checkbox" name="admin"> Administrador (acesso total a este painel)</label>
         </fieldset>
+        <?php if ($grupos_ligados) { ?>
+        <fieldset class="opcoes" data-grupos>
+            <legend>Grupos de câmeras</legend>
+            <div class="lista-cameras lista-grupos-marcar"></div>
+            <small>Vê todas as câmeras dos grupos marcados, inclusive as que entrarem no grupo depois.</small>
+        </fieldset>
+        <?php } ?>
         <fieldset class="opcoes" data-cameras>
-            <legend>Câmeras que pode ver</legend>
+            <legend><?php echo $grupos_ligados ? 'Câmeras avulsas (além dos grupos)' : 'Câmeras que pode ver'; ?></legend>
             <div class="lista-cameras"></div>
-            <small>Câmera nova entra liberada para todos — volte aqui se for preciso restringir.</small>
+            <small><?php echo $grupos_ligados ? 'Câmera nova só aparece para quem tem o grupo dela ou a recebe avulsa.' : 'Câmera nova entra liberada para todos — volte aqui se for preciso restringir.'; ?></small>
+            <?php if ($grupos_ligados) { ?><p class="nota" data-conta-visiveis aria-live="polite"></p><?php } ?>
         </fieldset>
         <p class="erro-form" role="alert" hidden></p>
         <div class="dialogo-acoes">
@@ -159,9 +167,17 @@ $json = json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
             <label class="opcao"><input type="checkbox" name="site" checked> Entrar pelo site</label>
             <label class="opcao"><input type="checkbox" name="gravacoes"> Ver gravações</label>
         </fieldset>
+        <?php if ($grupos_ligados) { ?>
+        <fieldset class="opcoes" data-grupos>
+            <legend>Grupos de câmeras</legend>
+            <div class="lista-cameras lista-grupos-marcar"></div>
+            <small>Vê todas as câmeras dos grupos marcados, inclusive as que entrarem no grupo depois.</small>
+        </fieldset>
+        <?php } ?>
         <fieldset class="opcoes" data-cameras>
-            <legend>Câmeras que podem ver</legend>
+            <legend><?php echo $grupos_ligados ? 'Câmeras avulsas (além dos grupos)' : 'Câmeras que podem ver'; ?></legend>
             <div class="lista-cameras"></div>
+            <?php if ($grupos_ligados) { ?><p class="nota" data-conta-visiveis aria-live="polite"></p><?php } ?>
         </fieldset>
         <p class="erro-form" role="alert" hidden></p>
         <div class="dialogo-acoes">
@@ -193,10 +209,18 @@ $json = json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
     <form method="dialog" data-form-cameras autocomplete="off" novalidate>
         <h2 id="dlg-cameras-t">Câmeras que podem ver</h2>
         <p class="intro" data-alvo></p>
+        <?php if ($grupos_ligados) { ?>
+        <fieldset class="opcoes" data-grupos>
+            <legend>Grupos de câmeras</legend>
+            <div class="lista-cameras lista-grupos-marcar"></div>
+            <small>Vê todas as câmeras dos grupos marcados, inclusive as que entrarem no grupo depois.</small>
+        </fieldset>
+        <?php } ?>
         <fieldset class="opcoes" data-cameras>
-            <legend class="sr">Câmeras</legend>
+            <legend class="<?php echo $grupos_ligados ? '' : 'sr'; ?>"><?php echo $grupos_ligados ? 'Câmeras avulsas (além dos grupos)' : 'Câmeras'; ?></legend>
             <div class="lista-cameras"></div>
             <small>O que for marcado aqui substitui a escolha atual de cada usuário selecionado.</small>
+            <?php if ($grupos_ligados) { ?><p class="nota" data-conta-visiveis aria-live="polite"></p><?php } ?>
         </fieldset>
         <p class="erro-form" role="alert" hidden></p>
         <div class="dialogo-acoes">

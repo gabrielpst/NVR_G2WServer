@@ -1,6 +1,6 @@
 # Grupos de câmeras: desenho e migração
 
-Estado: **proposta** (27/11/2026), antes de qualquer código. Vale a partir da versão que trouxer a branch `proxima-2026-11`.
+Estado: **implementado** na branch `proxima-2026-11` (27/11/2026) e testado na bancada (ida e volta nos dois modos). A escolha do modo de migração (A ou B, abaixo) é do Gabriel; o roteiro aceita os dois (`--modo=todas`, padrão, ou `--modo=avulsas`). Nada muda numa instalação até o roteiro rodar nela.
 
 ## O que muda para quem usa
 
@@ -90,7 +90,7 @@ php grupos-cameras.php --desfazer     # volta ao modo antigo
 3. Cria as tabelas; numa transação, com as linhas de `Users` travadas (`SELECT … FOR UPDATE`) para nenhum pedido mexer nas listas no meio: copia `access_device_list` de todos os usuários para `G2WGruposAntes`; para cada usuário comum calcula o que ele vê hoje (`todas as câmeras não removidas − bloqueio`) e grava conforme a **opção escolhida** (abaixo); recalcula; **confere** que, para todo usuário, o conjunto de câmeras visíveis é idêntico ao de antes; se uma diferir, desfaz a transação e para sem marcar nada.
 4. Marca `G2W_PERMISSAO_GRUPOS = 1`.
 
-Administradores: nada é gravado para eles; a lista deles não é tocada.
+Administradores: nada é gravado para eles; a lista deles não é tocada pela migração. Depois dela, salvar um administrador pela tela Usuários zera a lista dele (vê todas), e rebaixar um administrador a comum aplica os grupos/avulsas que ele tiver (nenhum = não vê nada).
 
 **Escolha para o Gabriel — como os usuários entram nos grupos:**
 

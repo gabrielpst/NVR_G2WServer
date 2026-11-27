@@ -385,19 +385,56 @@
         var guardado = sessionStorage.getItem('g2w-aviso');
         if (guardado) { sessionStorage.removeItem('g2w-aviso'); aviso(guardado); }
 
+        // Com os grupos ligados, "câmeras" do formulário são as AVULSAS (além
+        // dos grupos), e quem é novo começa sem nada marcado.
+        var G = !!D.grupos_ligados;
+        var camsDoGrupo = {};
+        (D.grupos || []).forEach(function (g) { camsDoGrupo[g.id] = g.cameras; });
         function caixasCameras(form, marcadas) {
             var caixa = $('[data-cameras] .lista-cameras', form);
             caixa.textContent = '';
             if (!D.cameras.length) { caixa.appendChild(el('p', { class: 'vazio', text: 'Nenhuma câmera cadastrada.' })); return; }
             D.cameras.forEach(function (c) {
                 var i = el('input', { type: 'checkbox', name: 'camera', value: c.id });
-                i.checked = !marcadas || marcadas.indexOf(c.id) >= 0;
+                i.checked = marcadas ? marcadas.indexOf(c.id) >= 0 : !G;
                 caixa.appendChild(el('label', { class: 'opcao' }, [i, ' ' + c.nome]));
+            });
+            contarVisiveis(form);
+        }
+        function caixasGrupos(form, marcados) {
+            var caixa = $('[data-grupos] .lista-grupos-marcar', form);
+            if (!caixa) return;
+            caixa.textContent = '';
+            if (!D.grupos.length) { caixa.appendChild(el('p', { class: 'vazio', text: 'Nenhum grupo criado ainda (aba Grupos).' })); return; }
+            D.grupos.forEach(function (g) {
+                var i = el('input', { type: 'checkbox', name: 'grupo', value: g.id });
+                i.checked = !!marcados && marcados.indexOf(g.id) >= 0;
+                caixa.appendChild(el('label', { class: 'opcao' }, [i, ' ' + g.nome + ' (' + g.cameras.length + ')']));
             });
         }
         function camerasMarcadas(form) {
             return $$('input[name="camera"]:checked', form).map(function (i) { return parseInt(i.value, 10); });
         }
+        function gruposMarcados(form) {
+            return $$('input[name="grupo"]:checked', form).map(function (i) { return parseInt(i.value, 10); });
+        }
+        function permissoes(form) {
+            return G ? { grupos: gruposMarcados(form), avulsas: camerasMarcadas(form) } : { cameras: camerasMarcadas(form) };
+        }
+        // "Vê N de M câmeras" ao vivo, somando grupos e avulsas
+        function contarVisiveis(form) {
+            var alvo = $('[data-conta-visiveis]', form);
+            if (!alvo || !G) return;
+            var v = {};
+            camerasMarcadas(form).forEach(function (id) { v[id] = true; });
+            gruposMarcados(form).forEach(function (g) { (camsDoGrupo[g] || []).forEach(function (id) { v[id] = true; }); });
+            var n = D.cameras.filter(function (c) { return v[c.id]; }).length;
+            alvo.textContent = n === 0 ? 'Com isso não vê nenhuma câmera.' : 'Com isso vê ' + n + ' de ' + D.cameras.length + ' câmeras.';
+            alvo.classList.toggle('coord-alerta', n === 0);
+        }
+        $$('[data-form-usuario], [data-form-lote], [data-form-cameras]').forEach(function (f) {
+            f.addEventListener('change', function (ev) { if (ev.target.name === 'grupo' || ev.target.name === 'camera') contarVisiveis(f); });
+        });
 
         // --- editar / novo
         var dlgU = $('#dlg-usuario');
@@ -419,7 +456,8 @@
                 formU.elements.trocar_senha.checked = true;
             }
             formU.elements.admin.disabled = !!(u && u.id === D.eu);
-            caixasCameras(formU, u ? u.cameras : null);
+            caixasGrupos(formU, u ? u.grupos : null);
+            caixasCameras(formU, u ? (G ? u.avulsas : u.cameras) : null);
             abrir(dlgU);
             focoInicial(formU.elements.login);
         }
@@ -435,9 +473,9 @@
                 login: f.login.value.trim(), nome: f.nome.value.trim(), senha: f.senha.value,
                 telefone: f.telefone.value.trim(), email: f.email.value.trim(), obs: f.obs.value.trim(),
                 app: f.app.checked, site: f.site.checked, gravacoes: f.gravacoes.checked,
-                trocar_senha: f.trocar_senha.checked, admin: f.admin.checked,
-                cameras: camerasMarcadas(formU)
+                trocar_senha: f.trocar_senha.checked, admin: f.admin.checked
             };
+            Object.assign(dados, permissoes(formU));
             if (!dados.login) { erroForm(formU, 'Informe o login.'); f.login.focus(); return; }
             if (!dados.id && dados.senha.length < D.senha_min) { erroForm(formU, 'A senha precisa ter pelo menos ' + D.senha_min + ' caracteres.'); f.senha.focus(); return; }
             var botao = $('button[type="submit"]', formU);
@@ -468,9 +506,9 @@
             var dados = {
                 prefixo: f.prefixo.value.trim(), nome_base: f.nome_base.value.trim(),
                 de: parseInt(f.de.value, 10), ate: parseInt(f.ate.value, 10), senha: f.senha.value,
-                trocar_senha: f.trocar_senha.checked, app: f.app.checked, site: f.site.checked, gravacoes: f.gravacoes.checked,
-                cameras: camerasMarcadas(formL)
+                trocar_senha: f.trocar_senha.checked, app: f.app.checked, site: f.site.checked, gravacoes: f.gravacoes.checked
             };
+            Object.assign(dados, permissoes(formL));
             if (!dados.prefixo) { erroForm(formL, 'Informe o prefixo do login.'); f.prefixo.focus(); return; }
             if (isNaN(dados.de) || isNaN(dados.ate)) { erroForm(formL, 'Informe o número inicial e o final.'); (isNaN(dados.de) ? f.de : f.ate).focus(); return; }
             if (dados.senha.length < D.senha_min) { erroForm(formL, 'A senha inicial precisa ter pelo menos ' + D.senha_min + ' caracteres.'); f.senha.focus(); return; }
@@ -525,7 +563,7 @@
         var formC = $('#dlg-cameras form');
         formC.addEventListener('submit', function (ev) {
             ev.preventDefault();
-            acaoLote('definir_cameras', { cameras: camerasMarcadas(formC) }, formC, $('button[type="submit"]', formC));
+            acaoLote('definir_cameras', permissoes(formC), formC, $('button[type="submit"]', formC));
         });
 
         document.addEventListener('click', function (ev) {
@@ -536,10 +574,12 @@
             var dlg = document.getElementById(id);
             var form = $('form', dlg);
             form.reset();
-            if (id === 'dlg-lote') { caixasCameras(form, null); previaLote(); }
+            if (id === 'dlg-lote') { caixasGrupos(form, null); caixasCameras(form, null); previaLote(); }
             if (id === 'dlg-cameras') {
                 var ids = idsSelecionados();
-                caixasCameras(form, ids.length === 1 ? porId[ids[0]].cameras : null);
+                var um = ids.length === 1 ? porId[ids[0]] : null;
+                caixasGrupos(form, um ? um.grupos : null);
+                caixasCameras(form, um ? (G ? um.avulsas : um.cameras) : (G ? [] : null));
             }
             var alvo = $('[data-alvo]', dlg);
             if (alvo) alvo.textContent = descreverAlvo();
@@ -547,6 +587,86 @@
             focoInicial($('input:not([type="hidden"])', form));
         });
 
+        desenhar();
+    }
+
+    // ------------------------------------------------------------- grupos
+    function iniciarGrupos() {
+        var bruto = $('#dados-grupos');
+        if (!bruto) return;
+        var D = JSON.parse(bruto.textContent);
+        var lista = $('#lista-grupos'), dlg = $('#dlg-grupo'), form = $('form', dlg);
+        var nomeCam = {};
+        D.cameras.forEach(function (c) { nomeCam[c.id] = c.nome; });
+
+        function desenhar() {
+            lista.textContent = '';
+            $('#sem-grupos').hidden = D.grupos.length > 0;
+            D.grupos.forEach(function (g) {
+                var nomes = g.cameras.map(function (id) { return nomeCam[id]; }).filter(Boolean);
+                var b = el('button', { type: 'button', class: 'botao', 'aria-label': 'Editar o grupo ' + g.nome, text: 'Editar' });
+                b.addEventListener('click', function () { abrirGrupo(g); });
+                lista.appendChild(el('li', { class: 'cartao linha-grupo' }, [
+                    el('div', {}, [
+                        el('strong', { text: g.nome }),
+                        el('span', { class: 'nota', text: nomes.length + (nomes.length === 1 ? ' câmera' : ' câmeras') + ' · ' +
+                            g.usuarios + (g.usuarios === 1 ? ' usuário' : ' usuários') }),
+                        el('span', { class: 'nota grupo-cams', text: nomes.length ? nomes.join(', ') : 'Nenhuma câmera ainda.' })
+                    ]),
+                    b
+                ]));
+            });
+        }
+        function abrirGrupo(g) {
+            form.reset();
+            form.elements.id.value = g ? g.id : '';
+            $('#dlg-grupo-t').textContent = g ? 'Grupo ' + g.nome : 'Novo grupo';
+            form.elements.nome.value = g ? g.nome : '';
+            var caixa = $('#g-cameras');
+            caixa.textContent = '';
+            D.cameras.forEach(function (c) {
+                var i = el('input', { type: 'checkbox', name: 'camera', value: c.id });
+                i.checked = !!g && g.cameras.indexOf(c.id) >= 0;
+                caixa.appendChild(el('label', { class: 'opcao' }, [i, ' ' + c.nome + (c.desativada ? ' (desligada)' : '')]));
+            });
+            $('#g-usuarios').textContent = g ? (g.usuarios ? 'Salvar vale na hora para ' + g.usuarios + (g.usuarios === 1 ? ' usuário' : ' usuários') + ' deste grupo.' : 'Nenhum usuário tem este grupo ainda.') : '';
+            $('#g-apagar').hidden = !g;
+            abrir(dlg);
+            focoInicial(form.elements.nome);
+        }
+        $('#novo-grupo').addEventListener('click', function () { abrirGrupo(null); });
+        form.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var nome = form.elements.nome.value.trim();
+            if (!nome) { erroForm(form, 'Dê um nome para o grupo.'); form.elements.nome.focus(); return; }
+            var botao = $('button[type="submit"]', form);
+            ocupado(botao, true);
+            enviar('grupo', {
+                id: form.elements.id.value ? parseInt(form.elements.id.value, 10) : null,
+                nome: nome,
+                cameras: $$('input[name="camera"]:checked', form).map(function (i) { return parseInt(i.value, 10); })
+            }).then(function (r) {
+                ocupado(botao, false);
+                if (!r.ok) { erroForm(form, r.erro); return; }
+                sessionStorage.setItem('g2w-aviso', r.msg);
+                window.location.reload();
+            });
+        });
+        $('#g-apagar').addEventListener('click', function () {
+            var id = parseInt(form.elements.id.value, 10);
+            var g = D.grupos.filter(function (x) { return x.id === id; })[0];
+            if (!g) return;
+            confirmar('Apagar o grupo ' + g.nome + '? ' + (g.usuarios ? g.usuarios + (g.usuarios === 1 ? ' usuário deixa' : ' usuários deixam') + ' de ver as câmeras que recebiam só por ele. ' : '') + 'As câmeras e as gravações não mudam.', 'Apagar grupo').then(function (sim) {
+                if (!sim) return;
+                enviar('grupo-apagar', { id: id }).then(function (r) {
+                    if (!r.ok) { erroForm(form, r.erro); return; }
+                    sessionStorage.setItem('g2w-aviso', r.msg);
+                    window.location.reload();
+                });
+            });
+        });
+        var guardado = sessionStorage.getItem('g2w-aviso');
+        if (guardado) { sessionStorage.removeItem('g2w-aviso'); aviso(guardado); }
         desenhar();
     }
 
@@ -1043,6 +1163,9 @@
             dados.gravar_som = f.gravar_som.checked;
             if (!f.modelo.disabled && f.modelo.value) dados.modelo = f.modelo.value;
             if (local) dados.local = local;
+            if ($('input[name="grupo"]', form)) {
+                dados.grupos = $$('input[name="grupo"]:checked', form).map(function (i) { return parseInt(i.value, 10); });
+            }
             var botao = $('button[type="submit"]', form);
             ocupado(botao, true, 'Adicionando…');
             enviar('camera-nova', dados).then(function (r) {
@@ -1216,5 +1339,6 @@
     if (aba === 'cameras') { iniciarCameras(); iniciarLocalizacao(); iniciarCadastro(); iniciarRemocao(); }
     if (aba === 'mapa') iniciarMapa();
     if (aba === 'usuarios') iniciarUsuarios();
+    if (aba === 'grupos') iniciarGrupos();
     if (aba === 'gravacoes') iniciarGravacoes();
 })();
