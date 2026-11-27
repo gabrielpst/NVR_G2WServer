@@ -87,7 +87,7 @@ class G2WGestao
         if (self::$tabelasOk !== null) return self::$tabelasOk;
         try {
             // caminho normal: as duas já existem e nenhum CREATE é executado
-            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 5) return self::$tabelasOk = true;
+            if (count(self::q("SHOW TABLES LIKE 'G2WPainel%'")) >= 6) return self::$tabelasOk = true;
             self::q("CREATE TABLE IF NOT EXISTS G2WPainelAcessos (
                 user_id INT NOT NULL PRIMARY KEY,
                 ultimo_acesso INT NOT NULL,
@@ -127,6 +127,13 @@ class G2WGestao
                 identificado TINYINT(1) NOT NULL DEFAULT 0,
                 pelo_app TINYINT(1) NOT NULL DEFAULT 0,
                 desde INT NOT NULL
+            ) DEFAULT CHARSET=ascii");
+            // "Formato da imagem" por câmera. Sem linha = automático. Só a
+            // exibição muda (painel, ao vivo, miniatura, app): a gravação não.
+            self::q("CREATE TABLE IF NOT EXISTS G2WPainelFormatos (
+                device_id INT NOT NULL PRIMARY KEY,
+                formato VARCHAR(10) NOT NULL,
+                alterado_em INT NOT NULL
             ) DEFAULT CHARSET=ascii");
             self::$tabelasOk = true;
         } catch (Throwable $e) {
@@ -455,6 +462,7 @@ class G2WGestao
                 'fonte_editavel' => ($l['protocol'] === 'IP-RTSP'),
                 'tem_credencial' => (bool)intval($l['tem_credencial']),
                 'desativada' => (bool)intval($l['disabled']),
+                'formato' => self::formatoDe($id),
                 'retencao_dias' => ($l['max_age_days'] === null) ? null : intval($l['max_age_days']),
                 'gravacao' => $segue_padrao ? 'padrao' : self::modoAgenda($l['schedule']),
                 'padrao_servidor' => self::modoAgenda($global),
@@ -1032,12 +1040,73 @@ class G2WGestao
         self::q("DELETE FROM G2WPainelLocais WHERE device_id=?", 'i', array(intval($cameraId)));
     }
 
+    // ------------------------------------------------- formato da imagem
+
+    /* Formato de exibição por câmera (docs/api-formato-imagem.md).
+     * automatico: 960x1080 e outras 8:9 (canal de gravador que manda a
+     * imagem espremida pela metade) vira 16:9; o resto, como chega.
+     * proporção: largura/altura em que a imagem deve ser mostrada, esticada. */
+    const FORMATOS = array(
+        'auto' => array('Automático', null),
+        '16:9' => array('16:9', '16:9'),
+        '4:3' => array('4:3', '4:3'),
+        'empe' => array('Em pé (9:16)', '9:16'),
+        'original' => array('Como chega', null),
+    );
+
+    private static $formatosCache = null;
+
+    public static function formatos()
+    {
+        if (self::$formatosCache !== null) return self::$formatosCache;
+        $res = array();
+        try {
+            if (self::garantirTabelas()) {
+                foreach (self::q("SELECT device_id, formato FROM G2WPainelFormatos") as $f) {
+                    if (isset(self::FORMATOS[$f['formato']])) $res[intval($f['device_id'])] = (string)$f['formato'];
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('G2W gestao: formatos: '.$e->getMessage());
+        }
+        return self::$formatosCache = $res;
+    }
+
+    public static function formatoDe($cameraId)
+    {
+        $f = self::formatos();
+        return isset($f[intval($cameraId)]) ? $f[intval($cameraId)] : 'auto';
+    }
+
+    /* Proporção fixa do formato ("16:9", "4:3", "9:16") ou null (automático
+     * e "como chega" dependem do tamanho real da imagem). */
+    public static function proporcaoDoFormato($formato)
+    {
+        return isset(self::FORMATOS[$formato]) ? self::FORMATOS[$formato][1] : null;
+    }
+
+    public static function salvarFormato($cameraId, $formato)
+    {
+        if (!isset(self::FORMATOS[$formato])) throw new InvalidArgumentException('Formato da imagem inválido.');
+        if (!self::garantirTabelas()) throw new RuntimeException('tabela de formatos indisponivel');
+        if ($formato === 'auto') {
+            // sem linha = automático; a data fica para a miniatura ser refeita
+            self::q("INSERT INTO G2WPainelFormatos (device_id, formato, alterado_em) VALUES (?, 'auto', ?)
+                ON DUPLICATE KEY UPDATE formato='auto', alterado_em=VALUES(alterado_em)", 'ii', array(intval($cameraId), time()));
+        } else {
+            self::q("INSERT INTO G2WPainelFormatos (device_id, formato, alterado_em) VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE formato=VALUES(formato), alterado_em=VALUES(alterado_em)", 'isi', array(intval($cameraId), $formato, time()));
+        }
+        self::$formatosCache = null;
+    }
+
     /* Câmera excluída no modo avançado não deixa a localização para trás. */
     public static function limparLocaisOrfaos()
     {
         if (!self::garantirTabelas()) return;
         try {
             self::q("DELETE l FROM G2WPainelLocais l LEFT JOIN Devices d ON d.id=l.device_id WHERE d.id IS NULL");
+            self::q("DELETE f FROM G2WPainelFormatos f LEFT JOIN Devices d ON d.id=f.device_id WHERE d.id IS NULL");
         } catch (Throwable $e) {
             error_log('G2W gestao: locais orfaos: '.$e->getMessage());
         }

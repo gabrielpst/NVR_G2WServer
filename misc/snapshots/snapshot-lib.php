@@ -133,12 +133,33 @@ function bc_snap_rtsp_url($row)
 }
 
 /**
+ * Filtro de tamanho da miniatura conforme o "Formato da imagem" da câmera
+ * (painel > Câmeras; tabela G2WPainelFormatos). A foto já sai na proporção em
+ * que deve ser vista, então o aplicativo atual mostra certo sem atualização.
+ * automático: imagem 8:9 (960x1080, canal de gravador espremido) vira 640x360;
+ * o resto mantém a proporção. O ffmpeg do servidor só tem o filtro scale.
+ */
+function bc_snap_filtro($formato)
+{
+    switch ((string)$formato) {
+        case '16:9':     return 'scale=640:360';
+        case '4:3':      return 'scale=640:480';
+        case 'empe':     return 'scale=360:640';
+        case 'original': return 'scale=640:-2';
+        default:         return 'scale=w=640:h=if(eq(iw*9\\,ih*8)\\,360\\,2*trunc(320*ih/iw))';
+    }
+}
+
+/**
  * Grava UM quadro do stream num JPEG (downscale 640, qualidade de miniatura).
  * Escreve num .tmp e renomeia (atômico — o endpoint nunca lê um JPEG parcial).
  * Devolve true se gerou o arquivo.
  */
-function bc_snap_grab($rtspUrl, $destPath, $timeoutSec = 15)
+function bc_snap_grab($rtspUrl, $destPath, $timeoutSec = 15, $filtro = null)
 {
+    if ($filtro === null) {
+        $filtro = bc_snap_filtro('auto');
+    }
     if (empty($rtspUrl)) {
         return false;
     }
@@ -156,9 +177,9 @@ function bc_snap_grab($rtspUrl, $destPath, $timeoutSec = 15)
     $cmd = sprintf(
         'timeout -k 3 %d %s -nostdin -rtsp_transport tcp -skip_frame nokey -fflags nobuffer -flags low_delay ' .
         '-probesize 500000 -analyzeduration 1000000 -y -i %s ' .
-        '-vf scale=640:-2 -frames:v 1 -q:v 6 -f image2 %s >/dev/null 2>&1',
+        '-vf %s -frames:v 1 -q:v 6 -f image2 %s >/dev/null 2>&1',
         intval($timeoutSec), BC_FFMPEG,
-        escapeshellarg($rtspUrl), escapeshellarg($tmp)
+        escapeshellarg($rtspUrl), escapeshellarg($filtro), escapeshellarg($tmp)
     );
     system($cmd, $rc);
     if ($rc === 0 && file_exists($tmp) && filesize($tmp) > 0) {

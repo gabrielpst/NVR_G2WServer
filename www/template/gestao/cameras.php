@@ -13,9 +13,9 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
     <?php foreach ($cams as $c) { $f = 'cam'.$c['id']; ?>
     <form class="cartao linha-camera" data-form-camera data-id="<?php echo $c['id']; ?>" autocomplete="off" novalidate>
         <div class="linha-camera-imagem">
-            <?php $foto = $c['imagem_ts']
+            <?php $foto = '<span class="foto-moldura" data-formato="'.$h($c['formato']).'">'.($c['imagem_ts']
                 ? '<img src="/gestao/miniatura?id='.$c['id'].'&amp;t='.intval($c['imagem_ts']).'" alt="" loading="lazy" width="640" height="360">'
-                : '<span class="sem-imagem">Sem imagem</span>'; ?>
+                : '<span class="sem-imagem">Sem imagem</span>').'</span>'; ?>
             <?php if (!$c['desativada']) { ?>
                 <a class="abre-aovivo" href="/aovivo#camera=<?php echo $c['id']; ?>" aria-label="Ver <?php echo $h($c['nome']); ?> ao vivo"><?php echo $foto; ?><span class="selo-aovivo" aria-hidden="true">Ver ao vivo</span></a>
             <?php } else { echo $foto; } ?>
@@ -46,6 +46,15 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
                         <option value="manter" selected>Agenda própria (modo avançado)</option>
                     <?php } ?>
                 </select>
+            </div>
+            <div class="campo">
+                <label for="<?php echo $f; ?>-formato">Formato da imagem</label>
+                <select id="<?php echo $f; ?>-formato" name="formato" data-previa-formato aria-describedby="<?php echo $f; ?>-formato-ajuda">
+                    <?php foreach (G2WGestao::FORMATOS as $fk => $fv) { ?>
+                    <option value="<?php echo $h($fk); ?>"<?php echo $c['formato'] === $fk ? ' selected' : ''; ?>><?php echo $h($fv[0]); ?></option>
+                    <?php } ?>
+                </select>
+                <small id="<?php echo $f; ?>-formato-ajuda">Só muda como a imagem aparece (painel, ao vivo e aplicativo). A gravação não muda. Automático estica imagem 960×1080 para 16:9.</small>
             </div>
             <div class="campo campo-largo">
                 <label for="<?php echo $f; ?>-fonte">Endereço da câmera</label>

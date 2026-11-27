@@ -358,6 +358,10 @@ class gestao extends Controller
         $grav = isset($e['gravacao']) ? (string)$e['gravacao'] : 'manter';
         if (!in_array($grav, array('manter', 'padrao', 'sempre', 'nunca'), true)) $this->falha(422, 'Opção de gravação inválida.');
 
+        // formato da imagem: só exibição, tabela do painel (não toca em Devices)
+        $formato = isset($e['formato']) ? (string)$e['formato'] : null;
+        if ($formato !== null && !isset(G2WGestao::FORMATOS[$formato])) $this->falha(422, 'Formato da imagem inválido.');
+
         $sets = array('device_name=?', 'max_age_days=?');
         $tipos = 'si';
         $vals = array($nome, $ret);
@@ -396,6 +400,14 @@ class gestao extends Controller
         $tipos .= 'i';
         $vals[] = $id;
         G2WGestao::q("UPDATE Devices SET ".implode(', ', $sets)." WHERE id=?", $tipos, $vals);
+        if ($formato !== null && $formato !== G2WGestao::formatoDe($id)) {
+            try {
+                G2WGestao::salvarFormato($id, $formato);
+            } catch (Throwable $ex) {
+                error_log('G2W gestao: salvar formato: '.$ex->getMessage());
+                $this->falha(500, 'O resto foi salvo, mas o formato da imagem não. Tente de novo.');
+            }
+        }
         $this->json(array('ok' => true, 'msg' => 'Câmera salva.'));
     }
 

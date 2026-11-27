@@ -149,8 +149,34 @@
         if (alvo) alvo.scrollIntoView({ block: 'start' });
     }
 
+    /* Formato da imagem: miniatura 8:9 (960x1080 espremida) no automático é
+     * mostrada esticada em 16:9, mesmo antes de o servidor refazer a foto. */
+    function formatoEfetivo(moldura) {
+        var img = $('img', moldura);
+        if (!img) return;
+        function ver() {
+            var oito = img.naturalWidth && img.naturalWidth * 9 === img.naturalHeight * 8;
+            if (moldura.getAttribute('data-formato') === 'auto' && oito) moldura.setAttribute('data-efetivo', '16:9');
+            else moldura.removeAttribute('data-efetivo');
+        }
+        if (img.complete) ver();
+        img.addEventListener('load', ver);
+        return ver;
+    }
+    $$('.foto-moldura').forEach(formatoEfetivo);
+
     function iniciarCameras() {
         filtrarUmaCamera();
+        // prévia: trocar o formato já muda a miniatura; só grava em Salvar
+        $$('[data-previa-formato]').forEach(function (sel) {
+            var moldura = $('.foto-moldura', sel.closest('[data-form-camera]'));
+            if (!moldura) return;
+            var ver = formatoEfetivo(moldura);
+            sel.addEventListener('change', function () {
+                moldura.setAttribute('data-formato', sel.value);
+                if (ver) ver();
+            });
+        });
         window.addEventListener('hashchange', filtrarUmaCamera);
         function haPendente() {
             return $$('[data-form-camera] button[type="submit"], [data-form-disco] button[type="submit"]')
@@ -173,6 +199,8 @@
 
         $$('[data-form-camera]').forEach(function (form) {
             var salvo = vigiar(form);
+            // select não dispara "input" em todo navegador antigo
+            if (form.elements.formato) form.elements.formato.addEventListener('change', function () { form.dispatchEvent(new Event('input')); });
             var fonteAntes = form.elements.fonte && !form.elements.fonte.readOnly ? form.elements.fonte.value.trim() : null;
             form.addEventListener('submit', function (ev) {
                 ev.preventDefault();
@@ -186,6 +214,7 @@
                     retencao_dias: ret === '' ? null : Number(ret),
                     gravacao: form.elements.gravacao.value
                 };
+                if (form.elements.formato) dados.formato = form.elements.formato.value;
                 if (fonteAntes !== null) dados.fonte = form.elements.fonte.value.trim();
                 Promise.resolve(true).then(function () {
                     ocupado(botao, true);

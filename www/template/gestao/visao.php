@@ -98,7 +98,7 @@ $disco = $discos ? $discos[0] : null;
             <div class="camera-imagem">
                 <?php if (!$c['desativada']) { ?><a class="abre-aovivo" href="/aovivo#camera=<?php echo $c['id']; ?>" aria-label="Ver <?php echo $h($c['nome']); ?> ao vivo"><span class="selo-aovivo" aria-hidden="true">Ver ao vivo</span></a><?php } ?>
                 <?php if ($c['imagem_ts']) { ?>
-                    <img src="/gestao/miniatura?id=<?php echo $c['id']; ?>&amp;t=<?php echo intval($c['imagem_ts']); ?>" alt="Imagem mais recente de <?php echo $h($c['nome']); ?>" loading="lazy" width="640" height="360">
+                    <span class="foto-moldura" data-formato="<?php echo $h($c['formato']); ?>"><img src="/gestao/miniatura?id=<?php echo $c['id']; ?>&amp;t=<?php echo intval($c['imagem_ts']); ?>" alt="Imagem mais recente de <?php echo $h($c['nome']); ?>" loading="lazy" width="640" height="360"></span>
                     <?php if (!$c['imagem_ok'] || !empty($c['imagem_agendada'])) { ?><span class="selo-imagem">imagem de <?php echo $h(G2WGestao::quando($c['imagem_ts'])); ?></span><?php } ?>
                 <?php } else { ?>
                     <span class="sem-imagem">Sem imagem</span>

@@ -50,6 +50,17 @@ O `snapshot-updater` (sobe pelo entrypoint) guarda um JPEG por câmera em `/var/
 - `/login` e `/changepwd` refeitas em português, sem Bootstrap, com folha e script próprios (`entrar.css`, `entrar.js`). O envio e os campos não mudaram; as frases de erro do servidor seguem em inglês (o app usa as mesmas) e só a tela traduz.
 - Ícone v3 do app (câmera + anel) no logo do topo, na tela de entrada e no favicon.
 
+### Próxima versão do servidor (branch `proxima-2026-11`, 2026-11-27, ainda sem build)
+
+Sobre `aovivo-atraso-2026-11`. Só painel (PHP/JS) e miniaturas; o motor não muda.
+
+- **Imagem abre o ao vivo:** clicar na imagem da câmera (Câmeras e Visão geral) abre `/aovivo#camera=N`, uma câmera por tela, só aquela, sem trocar a grade salva da pessoa.
+- **Editar tudo:** botão ao lado de Gravações leva a `/ajax/editip.php?id=N` em outra aba, com o aviso de que salvar lá reinicia a gravação da câmera por alguns segundos.
+- **Coordenadas na localização:** campo que aceita `-20,404751 ; -54,586690`, `-20.404751, -54.586690`, graus/minutos/segundos e links do Google Maps, e move o marcador antes de salvar. Lido só no navegador (`template/dist/js/coordenadas.js`, teste em `tools/testes/coordenadas.teste.js`); ponto que só cai no Brasil trocando o sinal ou a ordem não é marcado, vem a sugestão.
+- **Avisos:** a visão geral mostra só "N pontos precisam de atenção" e o link para a aba nova `/gestao/avisos`; o Ver de câmera abre `/gestao/cameras#so=N` (só ela); usuários sem senha própria são informação, não ponto de atenção.
+- **Formato da imagem por câmera** (Automático, 16:9, 4:3, Em pé, Como chega), em Câmeras, com prévia antes de salvar; tabela `G2WPainelFormatos`, sem reinício e sem tocar na gravação. Automático estica imagem 8:9 (960×1080 de canal de gravador) para 16:9, como a NUV. Vale nas miniaturas do painel, no `/aovivo` e na miniatura do app (o `snapshot-updater` já gera a foto no formato). Rota para o app: `GET /media/formatos`, contrato em `docs/api-formato-imagem.md`.
+- Rodapé do `/aovivo` sem o atraso antigo de "10 a 20 segundos".
+
 ### Ao vivo com menos atraso (branch `aovivo-atraso-2026-11`, 2026-11-25, ainda sem build de produção)
 
 Antes, o app ficava de 15 a 20 s atrás do tempo real: o player espera 3 × `TARGETDURATION` atrás da ponta quando a playlist não diz nada, e os segmentos tinham 4 a 5 s. Mudou no motor (`server/hls.cpp`), sem mudança no app:

@@ -61,7 +61,7 @@ class mediaRequest extends Controller {
                 // ~3s, só até o updater assumir). Precisa da linha da câmera.
                 $cam = data::getObject('Devices', 'id', $id);
                 if (!empty($cam[0])) {
-                    bc_snap_grab(bc_snap_rtsp_url($cam[0]), $snap);
+                    bc_snap_grab(bc_snap_rtsp_url($cam[0]), $snap, 15, bc_snap_filtro(G2WGestao::formatoDe($id)));
                 }
             }
             file_exists($snap) or requestError('E: snapshot not available yet');

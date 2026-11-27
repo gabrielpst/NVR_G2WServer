@@ -424,6 +424,17 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--verde); 
 .mapa .leaflet-popup-content a { display: inline-block; margin-top: 6px; margin-right: 10px; font-weight: 600; }
 .busca-endereco { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
 .busca-endereco .campo { flex: 1 1 260px; }
+/* Formato da imagem (por câmera): a moldura continua 16:9; a imagem é
+   esticada para o formato escolhido (como a NUV faz com 960x1080). */
+.foto-moldura { position: absolute; inset: 0; display: block; overflow: hidden; background: #0d1512; }
+.linha-camera-imagem .foto-moldura { position: relative; inset: auto; aspect-ratio: 16 / 9; border-radius: 8px; }
+.foto-moldura img, .linha-camera-imagem .foto-moldura img {
+  position: absolute; top: 0; height: 100%; left: 0; width: 100%; object-fit: contain; aspect-ratio: auto; border-radius: 0;
+}
+.foto-moldura .sem-imagem { position: absolute; inset: 0; }
+.foto-moldura[data-formato="16:9"] img, .foto-moldura[data-efetivo="16:9"] img { object-fit: fill; }
+.foto-moldura[data-formato="4:3"] img { object-fit: fill; width: 75%; left: 12.5%; }
+.foto-moldura[data-formato="empe"] img { object-fit: fill; width: 31.640625%; left: 34.1796875%; }
 .faixa-filtro { background: var(--verde-suave); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; }
 .faixa-filtro a { font-weight: 600; margin-left: 4px; }
 .coord-msg { margin: 6px 0 8px; font-size: .875rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

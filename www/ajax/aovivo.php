@@ -36,6 +36,7 @@ class aovivo extends Controller
             $res[] = array(
                 'id' => $id,
                 'nome' => (string)$c['device_name'],
+                'formato' => G2WGestao::formatoDe($id),
                 'foto_ts' => $ts ?: null,
                 'foto_hora' => $ts ? date('H:i', $ts) : null,
             );

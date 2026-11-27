@@ -198,6 +198,7 @@
 
             raiz.appendChild(foto);
             raiz.appendChild(video);
+            ajustarFormato(raiz, cam, video, foto);
             raiz.appendChild(el('div', { class: 'av-legenda' }, [el('strong', { class: 'av-nome', text: cam.nome, translate: 'no' }), rotulo]));
             raiz.appendChild(detalhe);
             raiz.appendChild(el('div', { class: 'av-botoes' }, [botaoSom, trocar, cheia]));
@@ -391,6 +392,37 @@
             },
             retomar: function () { if (cam && (estado === 'parado')) { tentativa = 0; iniciar(); } }
         };
+    }
+
+    // ---------------------------------------------------- formato da imagem
+    // Por câmera (painel > Câmeras > Formato da imagem). O quadro continua do
+    // mesmo tamanho; a imagem é esticada para a proporção escolhida, como a
+    // NUV faz. Automático: imagem 8:9 (960x1080) vira 16:9; o resto, como chega.
+    var PROPORCAO = { '16:9': 16 / 9, '4:3': 4 / 3, 'empe': 9 / 16 };
+    function proporcaoDe(formato, w, h) {
+        if (PROPORCAO[formato]) return PROPORCAO[formato];
+        if (formato === 'auto' && w && h && w * 9 === h * 8) return 16 / 9;
+        return null;
+    }
+    function ajustarFormato(raiz, cam, video, foto) {
+        var formato = cam.formato || 'auto';
+        function aplicar() {
+            var W = raiz.clientWidth, H = raiz.clientHeight;
+            [[video, video.videoWidth, video.videoHeight], [foto, foto.naturalWidth, foto.naturalHeight]].forEach(function (x) {
+                var r = proporcaoDe(formato, x[1], x[2]);
+                var s = x[0].style;
+                if (!r || !W || !H) { s.objectFit = ''; s.width = ''; s.height = ''; s.left = ''; s.top = ''; return; }
+                var w = Math.min(W, H * r), h = w / r;
+                s.objectFit = 'fill';
+                s.width = w + 'px'; s.height = h + 'px';
+                s.left = ((W - w) / 2) + 'px'; s.top = ((H - h) / 2) + 'px';
+            });
+        }
+        video.addEventListener('loadedmetadata', aplicar);
+        video.addEventListener('resize', aplicar);
+        foto.addEventListener('load', aplicar);
+        if (window.ResizeObserver) new ResizeObserver(aplicar).observe(raiz);
+        else window.addEventListener('resize', aplicar);
     }
 
     // --------------------------------------------------------------- grade

@@ -52,6 +52,17 @@ while (true) {
         "WHERE disabled='0' AND protocol IN ('IP-RTSP','IP','IP-MJPEG')"
     );
 
+    // "Formato da imagem" de cada câmera (tabela do painel; pode não existir
+    // em instalação antiga: aí vale o automático para todas).
+    $formatos = array();
+    $tem_formatos = data::query("SHOW TABLES LIKE 'G2WPainelFormatos'");
+    if (is_array($tem_formatos) && $tem_formatos) {
+        $fs = data::query("SELECT device_id, formato, alterado_em FROM G2WPainelFormatos");
+        if (is_array($fs)) {
+            foreach ($fs as $f) $formatos[intval($f['device_id'])] = $f;
+        }
+    }
+
     // Agenda por instalação (/etc/g2w/miniaturas.json): renova só nos horários
     // fixos. Fora deles, só captura a câmera que ainda não tem miniatura
     // (câmera nova) ou cuja miniatura é anterior ao último horário (falhou na
@@ -62,13 +73,16 @@ while (true) {
 
     if (is_array($cams)) {
         foreach ($cams as $c) {
+            $fmt = isset($formatos[intval($c['id'])]) ? $formatos[intval($c['id'])] : null;
             if ($agenda) {
                 $mt = @filemtime(bc_snap_path($c['id']));
-                if ($mt && $mt >= $corte) { continue; }
+                // formato trocado no painel depois da última foto: refaz já
+                $mudou = $fmt && $mt && intval($fmt['alterado_em']) > $mt;
+                if ($mt && $mt >= $corte && !$mudou) { continue; }
             }
             $url = bc_snap_rtsp_url($c);
             if (!$url) { continue; }
-            $ok = bc_snap_grab($url, bc_snap_path($c['id']));
+            $ok = bc_snap_grab($url, bc_snap_path($c['id']), 15, bc_snap_filtro($fmt ? $fmt['formato'] : 'auto'));
             if (!$ok) {
                 snap_log("camera {$c['id']}: falha ao capturar quadro (segue)");
             }
