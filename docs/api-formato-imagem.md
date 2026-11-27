@@ -8,7 +8,7 @@ No painel (`/gestao/cameras`) o administrador escolhe, por câmera, o **Formato 
 
 | `formato` | Na tela | `proporcao` | Como mostrar |
 |---|---|---|---|
-| `auto` (padrão) | Automático | `null` | Imagem **8:9 com altura até 1080** (960×1080, 640×720, 480×540) vira **16:9**; qualquer outra, como chega (inclusive 8:9 maior, como 2304×2592 ou 1920×2160) |
+| `auto` (padrão) | Automático | `null` | Imagem **quase 8:9 (largura/altura de 0,87 a 0,90) com altura até 1088** (960×1080, 960×1088, 640×720, 480×540) vira **16:9**; qualquer outra, como chega (inclusive 8:9 maior, como 2304×2592 ou 1920×2160) |
 | `16:9` | 16:9 | `"16:9"` | esticar para 16:9 |
 | `4:3` | 4:3 | `"4:3"` | esticar para 4:3 |
 | `empe` | Em pé (9:16) | `"9:16"` | esticar para 9:16 |
@@ -19,11 +19,15 @@ No painel (`/gestao/cameras`) o administrador escolhe, por câmera, o **Formato 
 **Regra exata do automático** (a mesma no servidor e no aplicativo), com `L` e `A` = largura e altura do vídeo decodificado:
 
 ```
-esticar para 16:9  se  L × 9 == A × 8  e  A <= 1080
+esticar para 16:9  se  100 × L >= 87 × A   e   100 × L <= 90 × A   e   A <= 1088
 senão              como chega
 ```
 
-Por que até 1080: câmera de **lente dupla** entrega duas imagens 16:9 empilhadas (ex.: 2304×2592 = 2 × 2304×1296), que também é 8:9 mas não está espremida; esticar achataria as duas metades (achado na câmera 8 do Silvestre4, 27/11). Para ela, o automático já deixa como chega.
+Só conta inteira (sem divisão), para dar o mesmo resultado em qualquer linguagem. Exemplos: 960×1080 (0,889) e 960×1088 (0,882) esticam; 640×720 estica; 1920×1080, 1280×720, 2560×1440, 1280×960, 2304×1296 não mudam; 2304×2592 e 1920×2160 (8:9, mas acima de 1088) ficam como chega.
+
+Por que a folga até 0,87 e 1088: o codificador arredonda a altura a múltiplo de 16, então o mesmo canal 960×1080 aparece como **960×1088** em alguns gravadores (2 câmeras assim na K Soluções, 27/11). As 8 linhas a mais não são cortadas: não foi visto se elas aparecem como borda.
+
+Por que até 1088 de altura: câmera de **lente dupla** entrega duas imagens 16:9 empilhadas (ex.: 2304×2592 = 2 × 2304×1296), que também é 8:9 mas não está espremida; esticar achataria as duas metades (achado na câmera 8 do Silvestre4, 27/11). Para ela, o automático já deixa como chega.
 
 Por que 8:9: canais de gravador Dahua/Intelbras entregam 960×1080 com a cena 16:9 espremida pela metade na horizontal e sem marcação de proporção (SAR). A NUV estica, e é o que o automático faz.
 
@@ -43,7 +47,7 @@ Resposta `200`:
 ```
 
 - Só as câmeras ligadas que o usuário pode ver, em ordem de id.
-- `proporcao` é `"L:A"` quando o formato é fixo; `null` quando depende do tamanho real do vídeo (`auto`, `original`). No `auto`, o aplicativo aplica a regra exata acima à largura e à altura do vídeo decodificado (`L × 9 == A × 8` e `A <= 1080` → 16:9).
+- `proporcao` é `"L:A"` quando o formato é fixo; `null` quando depende do tamanho real do vídeo (`auto`, `original`). No `auto`, o aplicativo aplica a regra exata acima à largura e à altura do vídeo decodificado (`100×L >= 87×A` e `100×L <= 90×A` e `A <= 1088` → 16:9).
 - Câmera sem formato escolhido vem como `auto`.
 - Usuário desativado: `403` `{"ok": false, "erro": "Usuário desativado."}`. Sem credencial: `401`. Credencial errada: `302` para `/login` (herdado).
 - Não devolve endereço, usuário nem senha de câmera.

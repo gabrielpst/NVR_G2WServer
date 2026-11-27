@@ -136,10 +136,11 @@ function bc_snap_rtsp_url($row)
  * Filtro de tamanho da miniatura conforme o "Formato da imagem" da câmera
  * (painel > Câmeras; tabela G2WPainelFormatos). A foto já sai na proporção em
  * que deve ser vista, então o aplicativo atual mostra certo sem atualização.
- * automático: imagem 8:9 com altura até 1080 (960x1080, 640x720: canal de
- * gravador espremido) vira 640x360; o resto mantém a proporção. 8:9 maior que
- * isso (2304x2592, câmera de lente dupla com duas imagens 16:9 empilhadas)
- * fica como chega. O ffmpeg do servidor só tem o filtro scale.
+ * automático: largura/altura entre 0,87 e 0,90 (8:9; 960x1088 = 960x1080
+ * arredondado a 16 pelo codificador) com altura até 1088 (canal de gravador
+ * espremido) vira 640x360; o resto mantém a proporção. 8:9 maior (2304x2592,
+ * câmera de lente dupla com duas imagens 16:9 empilhadas) fica como chega.
+ * Regra exata em docs/api-formato-imagem.md (o app usa a mesma). O ffmpeg do servidor só tem o filtro scale.
  */
 function bc_snap_filtro($formato)
 {
@@ -148,7 +149,7 @@ function bc_snap_filtro($formato)
         case '4:3':      return 'scale=640:480';
         case 'empe':     return 'scale=360:640';
         case 'original': return 'scale=640:-2';
-        default:         return 'scale=w=640:h=if(eq(iw*9\\,ih*8)*lte(ih\\,1080)\\,360\\,2*trunc(320*ih/iw))';
+        default:         return 'scale=w=640:h=if(gte(iw*100\\,ih*87)*lte(iw*100\\,ih*90)*lte(ih\\,1088)\\,360\\,2*trunc(320*ih/iw))';
     }
 }
 

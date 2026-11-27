@@ -54,7 +54,7 @@ $rotulo_padrao = array('sempre' => 'grava sempre', 'nunca' => 'não grava', 'per
                     <option value="<?php echo $h($fk); ?>"<?php echo $c['formato'] === $fk ? ' selected' : ''; ?>><?php echo $h($fv[0]); ?></option>
                     <?php } ?>
                 </select>
-                <small id="<?php echo $f; ?>-formato-ajuda">Só muda como a imagem aparece (painel, ao vivo e aplicativo). A gravação não muda. Automático estica para 16:9 só a imagem 960×1080 (e outras 8:9 até 1080 de altura).</small>
+                <small id="<?php echo $f; ?>-formato-ajuda">Só muda como a imagem aparece (painel, ao vivo e aplicativo). A gravação não muda. Automático estica para 16:9 só a imagem 960×1080 de canal de gravador (e parecidas, como 960×1088).</small>
             </div>
             <div class="campo campo-largo">
                 <label for="<?php echo $f; ?>-fonte">Endereço da câmera</label>
