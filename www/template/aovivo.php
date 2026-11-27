@@ -57,7 +57,7 @@ $v = function ($arq) { return g2w_v($arq); };
 
         <div class="av-grade" id="av-grade" data-quantas="todas"></div>
 
-        <p class="nota" id="av-nota">Clique num quadro para trocar a câmera dele. A imagem ao vivo chega com 10 a 20 segundos de atraso.</p>
+        <p class="nota" id="av-nota">Clique num quadro para trocar a câmera dele. A imagem ao vivo chega com alguns segundos de atraso.</p>
 
         <dialog id="av-escolher" class="dialogo dialogo-pequeno" aria-labelledby="av-escolher-t">
             <form method="dialog">
