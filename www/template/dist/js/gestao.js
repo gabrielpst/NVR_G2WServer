@@ -705,6 +705,7 @@
             lista.hidden = true;
             lista.textContent = '';
             msg.textContent = '';
+            var mc = $('#loc-coord-msg'); if (mc) { mc.textContent = ''; mc.className = 'coord-msg'; }
             $('#dlg-local-t').textContent = 'Localização: ' + atual.nome;
             campo.value = atual.local ? atual.local.endereco : '';
             botaoRemover.hidden = !atual.local;
@@ -767,6 +768,44 @@
         campo.addEventListener('keydown', function (ev) {
             if (ev.key === 'Enter') { ev.preventDefault(); buscar(); }
         });
+
+        // Coordenadas coladas: lidas só aqui no navegador (coordenadas.js);
+        // o servidor recebe os dois números ao salvar e confere a faixa.
+        var campoCoord = $('#loc-coord'), msgCoord = $('#loc-coord-msg');
+        function irParaCoord(lat, lon, texto) {
+            marcar(lat, lon, true);
+            if (mapa) mapa.setView([lat, lon], 17);
+            msgCoord.textContent = texto || 'Ponto marcado em ' + coordTexto(lat, lon) + '. Confira no mapa e salve.';
+            msgCoord.className = 'coord-msg';
+        }
+        function lerCoord() {
+            msgCoord.textContent = '';
+            msgCoord.className = 'coord-msg';
+            if (!window.G2WCoordenadas) { msgCoord.textContent = 'Recarregue a página para usar as coordenadas.'; return; }
+            if (!mapa) { semMapa(); return; }
+            var r = window.G2WCoordenadas.ler(campoCoord.value);
+            if (r.ok) {
+                irParaCoord(r.lat, r.lon, r.aviso ? r.aviso : null);
+                if (r.aviso) msgCoord.className = 'coord-msg coord-alerta';
+                return;
+            }
+            msgCoord.className = 'coord-msg coord-alerta';
+            msgCoord.appendChild(document.createTextNode(r.erro + ' '));
+            if (r.sugestao) {
+                var s = r.sugestao;
+                var b = el('button', { type: 'button', class: 'botao botao-leve', text: 'Usar ' + coordTexto(s.lat, s.lon) });
+                b.addEventListener('click', function () { campoCoord.value = coordTexto(s.lat, s.lon); irParaCoord(s.lat, s.lon); });
+                msgCoord.appendChild(b);
+            }
+        }
+        if (campoCoord) {
+            $('#loc-ir').addEventListener('click', lerCoord);
+            campoCoord.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Enter') { ev.preventDefault(); lerCoord(); }
+            });
+            // colar já marca (depois de o texto entrar no campo)
+            campoCoord.addEventListener('paste', function () { setTimeout(lerCoord, 0); });
+        }
 
         function refletir(local) {
             atual.local = local;

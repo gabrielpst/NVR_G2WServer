@@ -107,6 +107,16 @@ foreach ($cams as $c) $locais_json[] = array('id' => $c['id'], 'nome' => $c['nom
         <small id="loc-endereco-ajuda">O endereço aparece para quem pode ver a câmera. Ao buscar, só o texto digitado é enviado ao serviço público de busca do OpenStreetMap (Nominatim).</small>
         <ul class="busca-resultados" id="loc-resultados" aria-label="Lugares encontrados" hidden></ul>
         <p class="nota" id="loc-busca-msg" role="status" aria-live="polite"></p>
+        <div class="busca-endereco">
+            <div class="campo">
+                <label for="loc-coord">Coordenadas</label>
+                <input id="loc-coord" type="text" inputmode="text" spellcheck="false" autocapitalize="off" maxlength="2000" autocomplete="off"
+                    placeholder="Ex.: -20.404751, -54.586690" aria-describedby="loc-coord-ajuda loc-coord-msg">
+            </div>
+            <button type="button" class="botao" id="loc-ir">Marcar no mapa</button>
+        </div>
+        <small id="loc-coord-ajuda">Cole como vêm do Google Maps (-20.404751, -54.586690), com vírgula decimal (-20,404751 ; -54,586690) ou o link do Google Maps. O ponto só é gravado quando você salvar.</small>
+        <div class="coord-msg" id="loc-coord-msg" role="status" aria-live="polite"></div>
         <div class="mapa mapa-dialogo" id="loc-mapa" role="application" aria-label="Mapa: clique para marcar onde a câmera fica; arraste o marcador para ajustar"></div>
         <p class="nota">Clique no mapa para marcar o ponto, ou arraste o marcador. <span id="loc-coordenada" aria-live="polite"></span></p>
         <p class="erro-form" role="alert" hidden></p>

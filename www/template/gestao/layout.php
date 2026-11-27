@@ -72,6 +72,7 @@ $v_js = g2w_v('template/dist/js/gestao.js');
     <div id="avisos-flutuantes" class="toasts" role="status" aria-live="polite"></div>
     <?php if ($com_mapa) { ?><script src="<?php echo $leaflet; ?>/leaflet.js" defer></script><?php } ?>
 
+    <?php if ($com_mapa) { ?><script src="/template/dist/js/coordenadas.js?v=<?php echo g2w_v('template/dist/js/coordenadas.js'); ?>" defer></script><?php } ?>
     <script src="/template/dist/js/gestao.js?v=<?php echo $v_js; ?>" defer></script>
 </body>
 </html>
