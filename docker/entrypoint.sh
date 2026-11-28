@@ -101,8 +101,10 @@ SQL
 # Desligar com ONVIF_EVENT_BRIDGE=0 se precisar isolar algum problema.
 if [ "${ONVIF_EVENT_BRIDGE:-1}" = "1" ] && [ -f /usr/share/bluecherry/onvif/onvif-event-supervisor.php ]; then
   log "> Starting ONVIF event bridge supervisor"
-  # G2W 2026-11: relançado se sair (antes subia uma vez e, morto, ficava morto)
-  ( while true; do php /usr/share/bluecherry/onvif/onvif-event-supervisor.php; log "WARN: onvif-event-supervisor saiu ($?), relançando em 10 s"; sleep 10; done ) &
+  # G2W 2026-11: relançado se sair (antes subia uma vez e, morto, ficava morto).
+  # "|| rc=$?" é obrigatório: o script roda com set -e e, sem isso, a saída
+  # com erro do php derrubava o próprio laço de supervisão.
+  ( while true; do rc=0; php /usr/share/bluecherry/onvif/onvif-event-supervisor.php || rc=$?; log "WARN: onvif-event-supervisor saiu ($rc), relançando em 10 s"; sleep 10; done ) &
 else
   log "> ONVIF event bridge disabled"
 fi
@@ -113,7 +115,7 @@ if [ "${SNAPSHOT_UPDATER:-1}" = "1" ] && [ -f /usr/share/bluecherry/snapshots/sn
   log "> Starting snapshot updater"
   # G2W 2026-11: relançado se sair (na K Soluções morreu com o banco fora e
   # ficou sem miniatura até alguém perceber)
-  ( while true; do php /usr/share/bluecherry/snapshots/snapshot-updater.php; log "WARN: snapshot-updater saiu ($?), relançando em 10 s"; sleep 10; done ) &
+  ( while true; do rc=0; php /usr/share/bluecherry/snapshots/snapshot-updater.php || rc=$?; log "WARN: snapshot-updater saiu ($rc), relançando em 10 s"; sleep 10; done ) &
 else
   log "> Snapshot updater disabled"
 fi
