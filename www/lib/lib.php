@@ -239,7 +239,14 @@ class database{
 			mysqli_options($this->dblink, MYSQLI_OPT_WRITE_TIMEOUT, 30);
 		}
 			
-			$connect_result = mysqli_real_connect($this->dblink, $this->dbhost, $this->dbuser, $this->dbpassword, $this->dbname);
+			// G2W 2026-11: no PHP 8 o mysqli lança exceção em vez de devolver
+			// false; sem isto a nova tentativa nunca acontecia
+			try {
+				$connect_result = mysqli_real_connect($this->dblink, $this->dbhost, $this->dbuser, $this->dbpassword, $this->dbname);
+			} catch (mysqli_sql_exception $e) {
+				$connect_result = false;
+				error_log('G2W banco: falha ao conectar ('.$e->getCode().'), nova tentativa');
+			}
 			
 			if ($connect_result) {
 				// CRITICAL FIX: Set charset and other options
@@ -264,12 +271,28 @@ class database{
 	
 	// CRITICAL FIX: Check connection health
 	private function check_connection() {
-		if (!$this->dblink || !is_object($this->dblink) || !mysqli_ping($this->dblink)) {
+		// G2W 2026-11: conexão ociosa além do wait_timeout (300 s) é fechada
+		// pelo MySQL e, no PHP 8, o mysqli_ping LANÇA "MySQL server has gone
+		// away" em vez de devolver false. Processo longo (snapshot-updater com
+		// horário fixo dorme até 10 min) morria aqui. Agora reconecta.
+		$vivo = false;
+		if ($this->dblink && is_object($this->dblink)) {
+			try { $vivo = @mysqli_ping($this->dblink); } catch (Throwable $e) { $vivo = false; }
+		}
+		if (!$vivo) {
 			error_log("Database connection lost or invalid, attempting to reconnect");
 			$this->connect();
 		}
 	}
 	
+	/* 2006 = MySQL server has gone away; 2013 = Lost connection. */
+	private static function conexaoPerdida($e) {
+		$m = $e->getMessage();
+		return in_array(intval($e->getCode()), array(2006, 2013), true)
+			|| strpos($m, 'gone away') !== false || strpos($m, 'Lost connection') !== false
+			|| strpos($m, 'Packets out of order') !== false;
+	}
+
 	public static function escapeString(&$string) {
 		self::$instance or self::$instance = new database();
 		self::$instance->check_connection();
@@ -284,7 +307,14 @@ class database{
 		$retries = 0;
 		
 		while ($retries < $this->max_retries) {
-			$ret = mysqli_real_query($this->dblink, $query);
+			try {
+				$ret = mysqli_real_query($this->dblink, $query);
+			} catch (mysqli_sql_exception $e) {
+				if (!self::conexaoPerdida($e)) throw $e;
+				$retries++;
+				$this->connect();
+				continue;
+			}
 			
 			if ($ret) {
 				break;
@@ -314,7 +344,14 @@ class database{
 		$retries = 0;
 		
 		while ($retries < $this->max_retries) {
-			$qresult = mysqli_query($this->dblink, $query, MYSQLI_STORE_RESULT);
+			try {
+				$qresult = mysqli_query($this->dblink, $query, MYSQLI_STORE_RESULT);
+			} catch (mysqli_sql_exception $e) {
+				if (!self::conexaoPerdida($e)) throw $e;
+				$retries++;
+				$this->connect();
+				continue;
+			}
 
 			if ($qresult) {
 				$fetchedTable = mysqli_fetch_all($qresult, MYSQLI_ASSOC);

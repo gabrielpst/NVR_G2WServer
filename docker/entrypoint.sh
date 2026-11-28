@@ -101,7 +101,8 @@ SQL
 # Desligar com ONVIF_EVENT_BRIDGE=0 se precisar isolar algum problema.
 if [ "${ONVIF_EVENT_BRIDGE:-1}" = "1" ] && [ -f /usr/share/bluecherry/onvif/onvif-event-supervisor.php ]; then
   log "> Starting ONVIF event bridge supervisor"
-  php /usr/share/bluecherry/onvif/onvif-event-supervisor.php &
+  # G2W 2026-11: relançado se sair (antes subia uma vez e, morto, ficava morto)
+  ( while true; do php /usr/share/bluecherry/onvif/onvif-event-supervisor.php; log "WARN: onvif-event-supervisor saiu ($?), relançando em 10 s"; sleep 10; done ) &
 else
   log "> ONVIF event bridge disabled"
 fi
@@ -110,7 +111,9 @@ fi
 # miniatura sem depender de gravacao. Desliga com SNAPSHOT_UPDATER=0.
 if [ "${SNAPSHOT_UPDATER:-1}" = "1" ] && [ -f /usr/share/bluecherry/snapshots/snapshot-updater.php ]; then
   log "> Starting snapshot updater"
-  php /usr/share/bluecherry/snapshots/snapshot-updater.php &
+  # G2W 2026-11: relançado se sair (na K Soluções morreu com o banco fora e
+  # ficou sem miniatura até alguém perceber)
+  ( while true; do php /usr/share/bluecherry/snapshots/snapshot-updater.php; log "WARN: snapshot-updater saiu ($?), relançando em 10 s"; sleep 10; done ) &
 else
   log "> Snapshot updater disabled"
 fi
