@@ -411,8 +411,10 @@
         var formato = cam.formato || 'auto';
         function aplicar() {
             var W = raiz.clientWidth, H = raiz.clientHeight;
-            [[video, video.videoWidth, video.videoHeight], [foto, foto.naturalWidth, foto.naturalHeight]].forEach(function (x) {
-                var r = proporcaoDe(formato, x[1], x[2]);
+            // a foto já vem do servidor no formato (reduzida: o tamanho dela não
+            // diz o da câmera); nela só valem os formatos fixos
+            [[video, video.videoWidth, video.videoHeight, false], [foto, foto.naturalWidth, foto.naturalHeight, true]].forEach(function (x) {
+                var r = x[3] ? (PROPORCAO[formato] || null) : proporcaoDe(formato, x[1], x[2]);
                 var s = x[0].style;
                 if (!r || !W || !H) { s.objectFit = ''; s.width = ''; s.height = ''; s.left = ''; s.top = ''; return; }
                 var w = Math.min(W, H * r), h = w / r;
